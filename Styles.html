@@ -432,8 +432,14 @@
         grid-template-columns: 150px 1fr 70px;
         gap: 14px;
         align-items: center;
-        margin: 13px 0;
+        margin: 0;
+        padding: 11px 10px;
+        border-radius: 6px;
         font-size: 12px
+    }
+
+    .panel-body>.progress-row:nth-child(even) {
+        background: #f6f9fb
     }
 
     .progress-row strong {
@@ -470,8 +476,24 @@
         white-space: nowrap
     }
 
+    .table tbody>tr:nth-child(odd)>td {
+        background: #fff
+    }
+
+    .table tbody>tr:nth-child(even)>td {
+        background: #f6f9fb
+    }
+
+    .table tbody>tr.zebra-base>td {
+        background: #fff
+    }
+
+    .table tbody>tr.zebra-alt>td {
+        background: #f6f9fb
+    }
+
     .table tr:hover td {
-        background: #fbfdfd
+        background: #eef8f6
     }
 
     .table a {

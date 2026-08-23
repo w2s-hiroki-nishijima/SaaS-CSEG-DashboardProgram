@@ -278,8 +278,8 @@ function renderPerformance(d) {
             `</tr>` +
           `</thead>` +
           `<tbody>` +
-            `${d.rows.map(r => (
-              `<tr data-team="${esc(r.team)}" data-name="${esc(r.name)}" class="performance-member-row">` +
+            `${d.rows.map((r, rowIndex) => (
+              `<tr data-team="${esc(r.team)}" data-name="${esc(r.name)}" class="performance-member-row ${rowIndex % 2 ? 'zebra-alt' : 'zebra-base'}">` +
                 `<td>` +
                   `<button class="secondary" style="padding:4px 8px;margin-right:8px" onclick="togglePerformanceDetails(this, event)" aria-label="チケット明細を表示">▸</button>` +
                   `<strong>${esc(r.name)}</strong>` +
@@ -298,7 +298,7 @@ function renderPerformance(d) {
                 `<td>${num(r.tat5)}</td>` +
                 `<td>${num(r.tat6)}</td>` +
               `</tr>` +
-              `<tr class="performance-detail-row hidden" data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
+              `<tr class="performance-detail-row ${rowIndex % 2 ? 'zebra-alt' : 'zebra-base'} hidden" data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
                 `<td colspan="10"><div class="performance-detail-content"></div></td>` +
               `</tr>`
             )).join('')}` +
