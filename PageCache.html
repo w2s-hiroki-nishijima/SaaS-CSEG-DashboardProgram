@@ -1,0 +1,139 @@
+<script>
+(function installPageCache() {
+  const CACHE_TTL_MILLIS = 60 * 1000;
+  const cache = {};
+  let prefetchRequest = null;
+
+  const originalEnterDashboard = window.enterDashboard;
+  const originalOpenPage = window.openPage;
+  const originalReloadCurrentPage = window.reloadCurrentPage;
+
+  function cacheKey(page, month) {
+    const monthIndependentPages = [
+      'skills',
+      'notifications',
+      'settings'
+    ];
+
+    const period = monthIndependentPages.includes(page)
+      ? 'global'
+      : month;
+
+    return page + ':' + period;
+  }
+
+  function saveCache(page, month, data) {
+    cache[cacheKey(page, month)] = {
+      data: data,
+      savedAt: Date.now()
+    };
+  }
+
+  function readCache(page, month) {
+    return cache[cacheKey(page, month)] || null;
+  }
+
+  function deleteCache(page, month) {
+    delete cache[cacheKey(page, month)];
+  }
+
+  function renderCachedPage(page, data) {
+    if (page === 'dashboard') {
+      renderDashboard(data);
+    } else if (page === 'performance') {
+      renderPerformance(data);
+    } else if (page === 'skills') {
+      renderSkills(data);
+    } else if (page === 'assignments') {
+      renderAssignments(data);
+    } else if (page === 'targets') {
+      renderTargets(data);
+    } else if (page === 'aggregate') {
+      renderAggregate(data);
+    } else if (page === 'notifications') {
+      renderNotifications(data);
+    } else if (page === 'settings') {
+      renderSettings(data);
+    }
+  }
+
+  function prefetchPages(month) {
+    if (prefetchRequest) {
+      return prefetchRequest;
+    }
+
+    prefetchRequest = rpc('getNavigationPrefetchData', month)
+      .then(function handlePrefetchSuccess(result) {
+        const pages = result.pages || {};
+
+        Object.keys(pages).forEach(function savePage(page) {
+          saveCache(page, result.month, pages[page]);
+        });
+
+        prefetchRequest = null;
+        return result;
+      })
+      .catch(function handlePrefetchFailure() {
+        prefetchRequest = null;
+        return null;
+      });
+
+    return prefetchRequest;
+  }
+
+  window.enterDashboard = async function enterDashboardWithPrefetch() {
+    await originalEnterDashboard();
+
+    if (state.boot && state.boot.currentMonth) {
+      window.setTimeout(function startPrefetch() {
+        prefetchPages(state.boot.currentMonth);
+      }, 0);
+    }
+  };
+
+  window.openPage = async function openPageWithCache(page) {
+    const month = document.querySelector('#globalMonth').value;
+    const cached = readCache(page, month);
+
+    if (!cached) {
+      return originalOpenPage(page);
+    }
+
+    state.page = page;
+
+    document.querySelectorAll('.nav-item').forEach(function updateNav(item) {
+      item.classList.toggle('active', item.dataset.page === page);
+    });
+
+    const pageMeta = state.boot.pages.find(function findPage(item) {
+      return item.id === page;
+    });
+
+    document.querySelector('#pageTitle').textContent = pageMeta
+      ? pageMeta.label
+      : '';
+    document.querySelector('#pageEyebrow').textContent = page === 'dashboard'
+      ? 'OVERVIEW'
+      : page.toUpperCase();
+    document.querySelector('#globalMonth')
+      .closest('label')
+      .classList.toggle(
+        'hidden',
+        ['skills', 'notifications', 'settings'].includes(page)
+      );
+
+    renderCachedPage(page, cached.data);
+
+    if (Date.now() - cached.savedAt > CACHE_TTL_MILLIS) {
+      prefetchPages(month);
+    }
+  };
+
+  window.reloadCurrentPage = function reloadPageWithoutCache() {
+    const month = document.querySelector('#globalMonth').value;
+    deleteCache(state.page, month);
+
+    return originalReloadCurrentPage();
+  };
+})();
+</script>

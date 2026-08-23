@@ -1,0 +1,1004 @@
+<script>
+const state = {
+  boot: null,
+  page: 'dashboard',
+  cache: {},
+  skillMemberId: ''
+};
+
+const $ = s => document.querySelector(s);
+
+const $$ = s => Array.from(document.querySelectorAll(s));
+
+const rpc = (name, ...args) =>
+  new Promise((resolve, reject) =>
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(e =>
+        reject(new Error(e && e.message ? e.message : String(e)))
+      )[name](...args)
+  );
+
+const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+}[m]));
+
+const num = (v, d = 0) => Number(v || 0).toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+const pct = v => num(Number(v || 0) * 100, 0) + '%';
+
+function busy(on, text = '処理中...') {
+  $('#loaderText').textContent = text;
+  $('#loader').classList.toggle('hidden', !on);
+}
+
+function toast(msg, error = false) {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (error ? ' error' : '');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => el.className = 'toast', 3500);
+}
+
+async function enterDashboard() {
+  busy(true, 'アプリを起動しています...');
+  try {
+    const initial = await rpc('getInitialView');
+    state.boot = initial.boot;
+    state.page = 'dashboard';
+    $('#globalMonth').value = state.boot.currentMonth;
+    buildNav();
+    renderUser();
+    $('#landing').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === 'dashboard'));
+    $('#pageTitle').textContent = 'ダッシュボード';
+    $('#pageEyebrow').textContent = 'OVERVIEW';
+    $('#globalMonth').closest('label').classList.remove('hidden');
+    renderDashboard(initial.dashboard);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function showLanding() {
+  $('#app').classList.add('hidden');
+  $('#landing').classList.remove('hidden');
+}
+
+function buildNav() {
+  const allowed = state.boot.pages.filter(p => !p.admin || state.boot.user.isAdmin);
+  $('#nav').innerHTML = allowed.map(p => (
+    `<button class="nav-item" data-page="${p.id}" onclick="openPage('${p.id}')">` +
+      `<span class="nav-icon">${p.icon}</span>` +
+      `${esc(p.label)}${p.admin ? '<span class="nav-lock">管理</span>' : ''}` +
+    `</button>`
+  )).join('');
+  $$('.admin-only').forEach(el => el.classList.toggle('hidden', !state.boot.user.isAdmin));
+}
+
+function renderUser() {
+  const u = state.boot.user;
+  $('#userBadge').innerHTML = `<strong>${esc(u.name)}</strong>${esc(u.email)}${u.isAdmin ? ' · 管理者' : ''}`;
+}
+
+async function openPage(page) {
+  state.page = page;
+  $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
+  const meta = state.boot.pages.find(p => p.id === page);
+  $('#pageTitle').textContent = meta ? meta.label : '';
+  $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
+  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications', 'settings'].includes(page));
+  busy(true, 'データを読み込んでいます...');
+  try {
+    await renderPage(page);
+  } catch (e) {
+    $('#content').innerHTML = `<div class="panel"><div class="empty">${esc(e.message)}</div></div>`;
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function reloadCurrentPage() {
+  openPage(state.page);
+}
+
+async function renderPage(page) {
+  const month = $('#globalMonth').value;
+  if (page === 'dashboard')
+    return renderDashboard(await rpc('getDashboardView', month));
+  if (page === 'performance')
+    return renderPerformance(await rpc('getPerformanceView', month));
+  if (page === 'skills')
+    return renderSkills(await rpc('getSkillView'));
+  if (page === 'assignments')
+    return renderAssignments(await rpc('getAssignmentView', month));
+  if (page === 'targets')
+    return renderTargets(await rpc('getTargetView', month));
+  if (page === 'aggregate')
+    return renderAggregate(await rpc('getAggregateView', month));
+  if (page === 'notifications')
+    return renderNotifications(await rpc('getNotificationView'));
+  if (page === 'settings')
+    return renderSettings(await rpc('getSettingsView'));
+}
+
+function kpi(label, value, sub, cls = '') {
+  return (
+    `<div class="kpi ${cls}">` +
+      `<div class="kpi-label">${label}</div>` +
+      `<div class="kpi-value">${value}</div>` +
+      `<div class="kpi-sub">${sub || ''}</div>` +
+    `</div>`
+  );
+}
+
+function renderDashboard(d) {
+  const k = d.kpis;
+  const dailyMax = Math.max(1, ...d.daily.flatMap(x => [x.created, x.completed]));
+  $('#content').innerHTML = (
+    `<div class="kpi-grid">` +
+      `${kpi('今月の総起票数', num(k.createdCount), 'Backlog作成日基準')}` +
+      `${kpi('今月の完了件数', num(k.completedCount), '完了日基準')}` +
+      `${kpi('期限超過チケット', num(k.overdueCount), '未完了・期限経過', 'danger-card')}` +
+      `${kpi('目標達成率', pct(k.achievementRate), `${num(k.responsePoints, 1)} / ${num(k.targetCount, 1)} pt`)}` +
+    `</div>` +
+    `<div class="grid-2">` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div>` +
+            `<div class="panel-title">日次推移</div>` +
+            `<div class="panel-sub">起票数 / 完了数</div>` +
+          `</div>` +
+          `<span class="pill">最終同期 ${esc(d.lastSyncAt || '未同期')}</span>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `<div class="spark">` +
+            `${d.daily.map(x => (
+              `<div class="spark-col" title="${x.date} 起票${x.created} 完了${x.completed}">` +
+                `<div class="spark-bar created" style="height:${x.created / dailyMax * 100}%">` +
+                `</div>` +
+                `<div class="spark-bar completed" style="height:${x.completed / dailyMax * 100}%">` +
+                `</div>` +
+              `</div>`
+            )).join('')}` +
+          `</div>` +
+        `</div>` +
+      `</section>` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div>` +
+            `<div class="panel-title">今季の進捗</div>` +
+            `<div class="panel-sub">${esc(d.term.label)}</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `<div class="kpi-value">${pct(d.term.achievementRate)}</div>` +
+          `<div class="progress">` +
+            `<span style="width:${Math.min(100, d.term.achievementRate * 100)}%">` +
+            `</span>` +
+          `</div>` +
+          `<div class="stat-line">` +
+            `<span>実績ポイント</span>` +
+            `<strong>${num(d.term.points, 1)}</strong>` +
+          `</div>` +
+          `<div class="stat-line">` +
+            `<span>目標ポイント</span>` +
+            `<strong>${num(d.term.targetCount, 1)}</strong>` +
+          `</div>` +
+        `</div>` +
+      `</section>` +
+    `</div>` +
+    `<div class="grid-2">` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div class="panel-title">チーム別達成状況</div>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `${d.teamSummary.length ? d.teamSummary.map(x => (
+            `<div class="progress-row">` +
+              `<span>${esc(x.name)}</span>` +
+              `<div class="progress">` +
+                `<span style="width:${Math.min(100, x.achievementRate * 100)}%">` +
+                `</span>` +
+              `</div>` +
+              `<strong>${pct(x.achievementRate)}</strong>` +
+            `</div>`
+          )).join('') : '<div class="empty">目標・実績データがありません</div>'}` +
+        `</div>` +
+      `</section>` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div class="panel-title">期限超過</div>` +
+          `<span class="pill red">${d.overdueTickets.length}件表示</span>` +
+        `</div>` +
+        `<div class="table-wrap">` +
+          `<table class="table">` +
+            `<thead>` +
+              `<tr>` +
+                `<th>キー</th>` +
+                `<th>件名</th>` +
+                `<th>期限</th>` +
+                `<th>担当</th>` +
+              `</tr>` +
+            `</thead>` +
+            `<tbody>` +
+              `${d.overdueTickets.map(x => (
+                `<tr>` +
+                  `<td>` +
+                    `<a href="${esc(x.url)}" target="_blank">${esc(x.issueKey)}</a>` +
+                  `</td>` +
+                  `<td title="${esc(x.summary)}">${esc(x.summary).slice(0, 30)}</td>` +
+                  `<td>${esc(x.dueDate)}</td>` +
+                  `<td>${esc(x.owner || '-')}</td>` +
+                `</tr>`
+              )).join('')}` +
+            `</tbody>` +
+          `</table>` +
+        `</div>` +
+      `</section>` +
+    `</div>`
+  );
+}
+
+function renderPerformance(d) {
+  $('#content').innerHTML = (
+    `<div class="toolbar">` +
+      `<div class="toolbar-left">` +
+        `<select id="teamFilter" onchange="filterPerformance()">` +
+          `<option value="">全チーム</option>` +
+          `${d.teams.map(t => `<option>${esc(t)}</option>`).join('')}` +
+        `</select>` +
+        `<input id="memberSearch" placeholder="メンバー検索" oninput="filterPerformance()">` +
+      `</div>` +
+      `<span class="pill">${d.rows.length}名</span>` +
+    `</div>` +
+    `<section class="panel">` +
+      `<div class="table-wrap">` +
+        `<table class="table" id="performanceTable">` +
+          `<thead>` +
+            `<tr>` +
+              `<th>メンバー</th>` +
+              `<th>チーム</th>` +
+              `<th>完了</th>` +
+              `<th>ポイント</th>` +
+              `<th>目標</th>` +
+              `<th>達成率</th>` +
+              `<th>品質</th>` +
+              `<th>TAT ≤2日</th>` +
+              `<th>≤5日</th>` +
+              `<th>6日+</th>` +
+            `</tr>` +
+          `</thead>` +
+          `<tbody>` +
+            `${d.rows.map(r => (
+              `<tr data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
+                `<td>` +
+                  `<strong>${esc(r.name)}</strong>` +
+                `</td>` +
+                `<td>${esc(r.team || '-')}</td>` +
+                `<td>${num(r.completedCount)}</td>` +
+                `<td>${num(r.points, 1)}</td>` +
+                `<td>${num(r.targetCount, 1)}</td>` +
+                `<td>` +
+                  `<span class="pill ${r.achievementRate >= 1 ? 'green' : r.achievementRate >= .8 ? 'amber' : 'red'}">` +
+                    `${pct(r.achievementRate)}` +
+                  `</span>` +
+                `</td>` +
+                `<td>${r.qualityAverage == null ? '-' : num(r.qualityAverage, 2)}</td>` +
+                `<td>${num(r.tat2)}</td>` +
+                `<td>${num(r.tat5)}</td>` +
+                `<td>${num(r.tat6)}</td>` +
+              `</tr>`
+            )).join('')}` +
+          `</tbody>` +
+        `</table>` +
+      `</div>` +
+    `</section>`
+  );
+}
+
+function filterPerformance() {
+  const team = $('#teamFilter').value,
+    q = $('#memberSearch').value.toLowerCase();
+  $$('#performanceTable tbody tr').forEach(tr => tr.classList.toggle('hidden', (team && tr.dataset.team !== team) || (q && !tr.dataset.name.toLowerCase().includes(q))));
+}
+
+function renderSkills(d) {
+  state.cache.skills = d;
+  if (!state.skillMemberId)
+    state.skillMemberId = d.user.memberId || d.members[0]?.memberId || '';
+  const options = d.members.map(m => `<option value="${esc(m.memberId)}" ${m.memberId === state.skillMemberId ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
+  const adminForm = d.user.isAdmin ? (
+    `<section class="panel" style="margin-top:18px">` +
+      `<div class="panel-head">` +
+        `<div>` +
+          `<div class="panel-title">スキル項目を追加</div>` +
+          `<div class="panel-sub">参考シートの固定構造ではなく、自由に項目を追加できます</div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="panel-body">` +
+        `<div class="form-grid">` +
+          `<div class="field">` +
+            `<label>カテゴリ</label>` +
+            `<input id="skCategory" value="共通">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>スキル名</label>` +
+            `<input id="skName">` +
+          `</div>` +
+          `<div class="field full">` +
+            `<label>説明</label>` +
+            `<input id="skDescription">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>最大レベル</label>` +
+            `<input id="skMax" type="number" min="1" max="10" value="5">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>レベルごとのポイント</label>` +
+            `<input id="skPoint" type="number" min="0" value="10">` +
+          `</div>` +
+        `</div>` +
+        `<div class="actions">` +
+          `<button class="primary" onclick="addSkillMaster()">項目を追加</button>` +
+        `</div>` +
+      `</div>` +
+    `</section>`
+  ) : '';
+  $('#content').innerHTML = (
+    `<div class="toolbar">` +
+      `<div class="toolbar-left">` +
+        `<select onchange="state.skillMemberId=this.value;renderSkills(state.cache.skills)">${options}</select>` +
+      `</div>` +
+      `<div class="score" id="totalSkillScore">` +
+      `</div>` +
+    `</div>` +
+    `<div class="skill-grid">` +
+      `${d.skills.map(s => skillCard(s, d.scores.find(x => x.memberId === state.skillMemberId && x.skillId === s.skillId))).join('')}` +
+    `</div>` +
+    `${adminForm}`
+  );
+  updateSkillTotal();
+}
+
+function skillCard(s, score) {
+  const lv = Number(score?.level || 0);
+  return (
+    `<article class="skill-card">` +
+      `<span class="pill">${esc(s.category)}</span>` +
+      `<h4>${esc(s.skillName)}</h4>` +
+      `<p>${esc(s.description || '')}</p>` +
+      `<div class="level-row">` +
+        `${Array.from({ length: Number(s.maxLevel || 5) }, (_, i) => `<button class="level-dot ${i < lv ? 'active' : ''}" onclick="saveSkill('${esc(s.skillId)}',${i + 1})">${i + 1}</button>`).join('')}` +
+      `</div>` +
+      `<div class="score">${num(lv * Number(s.pointsPerLevel || 1))} pt</div>` +
+    `</article>`
+  );
+}
+
+function updateSkillTotal() {
+  const d = state.cache.skills;
+  const total = d.scores.filter(x => x.memberId === state.skillMemberId).reduce((a, x) => a + Number(x.points || 0), 0);
+  $('#totalSkillScore').textContent = `合計 ${num(total)} pt`;
+}
+
+async function saveSkill(skillId, level) {
+  busy(true, 'スキルを保存しています...');
+  try {
+    await rpc('saveSkillScore', {
+      memberId: state.skillMemberId,
+      skillId,
+      level
+    });
+    state.cache.skills = await rpc('getSkillView');
+    renderSkills(state.cache.skills);
+    toast('スキルポイントを保存しました');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+async function addSkillMaster() {
+  const input = {
+    category: $('#skCategory').value,
+    skillName: $('#skName').value,
+    description: $('#skDescription').value,
+    maxLevel: $('#skMax').value,
+    pointsPerLevel: $('#skPoint').value,
+    active: true,
+    displayOrder: state.cache.skills.skills.length * 10 + 10
+  };
+  busy(true, 'スキル項目を追加しています...');
+  try {
+    await rpc('saveSkillMaster', input);
+    toast('スキル項目を追加しました');
+    state.cache.skills = await rpc('getSkillView');
+    renderSkills(state.cache.skills);
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function renderAssignments(d) {
+  state.cache.assignments = d;
+  const own = d.user.memberId;
+  const options = d.members.map(m => `<option value="${esc(m.memberId)}" ${m.memberId === own ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
+  $('#content').innerHTML = (
+    `<div class="grid-2">` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div>` +
+            `<div class="panel-title">週次実績を入力</div>` +
+            `<div class="panel-sub">対応・改善・特殊対応を週単位で記録</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `<div class="form-grid">` +
+            `<div class="field">` +
+              `<label>メンバー</label>` +
+              `<select id="aMember">${options}</select>` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>週開始日</label>` +
+              `<input id="aWeek" type="date">` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>対応実績（h）</label>` +
+              `<input id="aResponse" type="number" min="0" step="0.5" value="0">` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>改善実績（h）</label>` +
+              `<input id="aImprovement" type="number" min="0" step="0.5" value="0">` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>特殊対応実績（h）</label>` +
+              `<input id="aSpecial" type="number" min="0" step="0.5" value="0">` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>予定時間（h）</label>` +
+              `<input id="aPlanned" type="number" min="0" step="0.5" value="0">` +
+            `</div>` +
+            `<div class="field full">` +
+              `<label>メモ</label>` +
+              `<textarea id="aNote" rows="3">` +
+              `</textarea>` +
+            `</div>` +
+          `</div>` +
+          `<div class="actions">` +
+            `<button class="primary" onclick="saveAssignment()">保存</button>` +
+          `</div>` +
+        `</div>` +
+      `</section>` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div class="panel-title">今月の入力状況</div>` +
+        `</div>` +
+        `<div class="panel-body">${assignmentSummary(d.rows)}</div>` +
+      `</section>` +
+    `</div>` +
+    `<section class="panel" style="margin-top:18px">` +
+      `<div class="table-wrap">` +
+        `<table class="table">` +
+          `<thead>` +
+            `<tr>` +
+              `<th>週</th>` +
+              `<th>メンバー</th>` +
+              `<th>チーム</th>` +
+              `<th>対応</th>` +
+              `<th>改善</th>` +
+              `<th>特殊</th>` +
+              `<th>予定</th>` +
+              `<th>更新者</th>` +
+            `</tr>` +
+          `</thead>` +
+          `<tbody>` +
+            `${d.rows.map(r => (
+              `<tr>` +
+                `<td>${esc(r.weekStart)}</td>` +
+                `<td>${esc(r.memberName)}</td>` +
+                `<td>${esc(r.team)}</td>` +
+                `<td>${num(r.responseHours, 1)}</td>` +
+                `<td>${num(r.improvementHours, 1)}</td>` +
+                `<td>${num(r.specialHours, 1)}</td>` +
+                `<td>${num(r.plannedHours, 1)}</td>` +
+                `<td>${esc(r.updatedBy)}</td>` +
+              `</tr>`
+            )).join('')}` +
+          `</tbody>` +
+        `</table>` +
+      `</div>` +
+    `</section>`
+  );
+  $('#aWeek').value = getMondayKey(new Date());
+}
+
+function assignmentSummary(rows) {
+  const total = rows.reduce((a, r) => a + Number(r.responseHours || 0) + Number(r.improvementHours || 0) + Number(r.specialHours || 0), 0);
+  const members = new Set(rows.map(r => r.memberId)).size;
+  return (
+    `<div class="kpi-value">${num(total, 1)} h</div>` +
+    `<div class="stat-line">` +
+      `<span>入力メンバー</span>` +
+      `<strong>${members}名</strong>` +
+    `</div>` +
+    `<div class="stat-line">` +
+      `<span>入力レコード</span>` +
+      `<strong>${rows.length}件</strong>` +
+    `</div>`
+  );
+}
+
+function getMondayKey(d) {
+  const x = new Date(d),
+    day = x.getDay();
+  x.setDate(x.getDate() - (day === 0 ? 6 : day - 1));
+  return x.toISOString().slice(0, 10);
+}
+
+async function saveAssignment() {
+  const input = {
+    memberId: $('#aMember').value,
+    weekStart: $('#aWeek').value,
+    responseHours: $('#aResponse').value,
+    improvementHours: $('#aImprovement').value,
+    specialHours: $('#aSpecial').value,
+    plannedHours: $('#aPlanned').value,
+    note: $('#aNote').value
+  };
+  busy(true, 'アサイン実績を保存しています...');
+  try {
+    await rpc('saveAssignmentEntry', input);
+    toast('保存しました');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function renderTargets(d) {
+  state.cache.targets = d;
+  $('#content').innerHTML = (
+    `<section class="panel">` +
+      `<div class="panel-head">` +
+        `<div>` +
+          `<div class="panel-title">${esc(d.month)} メンバー目標件数</div>` +
+          `<div class="panel-sub">実質スピード ×（アサイン時間 − マイナス − 調整）÷ ${d.baseHours}</div>` +
+        `</div>` +
+        `<button class="primary" onclick="saveTargets()">一括保存</button>` +
+      `</div>` +
+      `<div class="table-wrap">` +
+        `<table class="table" id="targetTable">` +
+          `<thead>` +
+            `<tr>` +
+              `<th>メンバー</th>` +
+              `<th>チーム</th>` +
+              `<th>レベル</th>` +
+              `<th>係数</th>` +
+              `<th>アサイン時間</th>` +
+              `<th>マイナス</th>` +
+              `<th>調整</th>` +
+              `<th>サポート</th>` +
+              `<th>目標件数</th>` +
+            `</tr>` +
+          `</thead>` +
+          `<tbody>` +
+            `${d.rows.map(r => (
+              `<tr data-id="${esc(r.memberId)}">` +
+                `<td>` +
+                  `<strong>${esc(r.memberName)}</strong>` +
+                `</td>` +
+                `<td>${esc(r.team)}</td>` +
+                `<td>${esc(r.skillLevel)}-${esc(String(r.experienceLevel).replace('CSEG', ''))}</td>` +
+                `<td>${num(r.speedCoefficient, 4)}</td>` +
+                `<td>` +
+                  `<input class="t-assignment" type="number" min="0" step="0.5" value="${r.assignmentHours}" oninput="recalcTarget(this)">` +
+                `</td>` +
+                `<td>` +
+                  `<input class="t-minus" type="number" min="0" step="0.5" value="${r.minusHours}" oninput="recalcTarget(this)">` +
+                `</td>` +
+                `<td>` +
+                  `<input class="t-adjust" type="number" min="0" step="0.5" value="${r.adjustmentHours}" oninput="recalcTarget(this)">` +
+                `</td>` +
+                `<td>` +
+                  `<input class="t-support" type="number" min="0" step="0.5" value="${r.supportHours}">` +
+                `</td>` +
+                `<td class="t-result" data-speed="${r.speedCoefficient}">` +
+                  `<strong>${num(r.targetCount, 1)}</strong>` +
+                `</td>` +
+              `</tr>`
+            )).join('')}` +
+          `</tbody>` +
+        `</table>` +
+      `</div>` +
+    `</section>`
+  );
+}
+
+function recalcTarget(input) {
+  const tr = input.closest('tr'),
+    speed = Number(tr.querySelector('.t-result').dataset.speed),
+    a = Number(tr.querySelector('.t-assignment').value || 0),
+    m = Number(tr.querySelector('.t-minus').value || 0),
+    x = Number(tr.querySelector('.t-adjust').value || 0);
+  tr.querySelector('.t-result strong').textContent = num(Math.max(0, speed * (a - m - x) / 5.5), 1);
+}
+
+async function saveTargets() {
+  const rows = $$('#targetTable tbody tr').map(tr => ({
+    memberId: tr.dataset.id,
+    assignmentHours: tr.querySelector('.t-assignment').value,
+    minusHours: tr.querySelector('.t-minus').value,
+    adjustmentHours: tr.querySelector('.t-adjust').value,
+    supportHours: tr.querySelector('.t-support').value
+  }));
+  busy(true, '目標件数を保存しています...');
+  try {
+    await rpc('saveMonthlyTargets', { month: $('#globalMonth').value, rows });
+    toast('目標件数を保存しました');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function renderAggregate(d) {
+  const t = d.totals;
+  $('#content').innerHTML = (
+    `<div class="kpi-grid">` +
+      `${kpi('起票数', num(t.createdCount), '')}` +
+      `${kpi('完了数', num(t.completedCount), '')}` +
+      `${kpi('対応ポイント', num(t.points, 1), '')}` +
+      `${kpi('期限超過', num(t.overdueCount), '', 'danger-card')}` +
+    `</div>` +
+    `<section class="panel" style="margin-top:18px">` +
+      `<div class="panel-head">` +
+        `<div>` +
+          `<div class="panel-title">チームアグリゲート</div>` +
+          `<div class="panel-sub">目標・品質・TATをチーム単位で集計</div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="table-wrap">` +
+        `<table class="table">` +
+          `<thead>` +
+            `<tr>` +
+              `<th>チーム</th>` +
+              `<th>起票</th>` +
+              `<th>完了</th>` +
+              `<th>ポイント</th>` +
+              `<th>目標</th>` +
+              `<th>達成率</th>` +
+              `<th>品質</th>` +
+              `<th>TAT≤2</th>` +
+              `<th>≤5</th>` +
+              `<th>6+</th>` +
+              `<th>期限超過</th>` +
+            `</tr>` +
+          `</thead>` +
+          `<tbody>` +
+            `${d.teams.map(r => (
+              `<tr>` +
+                `<td>` +
+                  `<strong>${esc(r.name)}</strong>` +
+                `</td>` +
+                `<td>${num(r.createdCount)}</td>` +
+                `<td>${num(r.completedCount)}</td>` +
+                `<td>${num(r.points, 1)}</td>` +
+                `<td>${num(r.targetCount, 1)}</td>` +
+                `<td>` +
+                  `<span class="pill ${r.achievementRate >= 1 ? 'green' : r.achievementRate >= .8 ? 'amber' : 'red'}">` +
+                    `${pct(r.achievementRate)}` +
+                  `</span>` +
+                `</td>` +
+                `<td>${r.qualityAverage == null ? '-' : num(r.qualityAverage, 2)}</td>` +
+                `<td>${num(r.tat2)}</td>` +
+                `<td>${num(r.tat5)}</td>` +
+                `<td>${num(r.tat6)}</td>` +
+                `<td>${num(r.overdueCount)}</td>` +
+              `</tr>`
+            )).join('')}` +
+          `</tbody>` +
+        `</table>` +
+      `</div>` +
+    `</section>`
+  );
+}
+
+function renderNotifications(d) {
+  state.cache.notifications = d;
+  $('#content').innerHTML = (
+    `<div class="grid-2">` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div>` +
+            `<div class="panel-title">通知ルールを追加</div>` +
+            `<div class="panel-sub">初期状態では通知は送信されません</div>` +
+          `</div>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `<div class="form-grid">` +
+            `<div class="field full">` +
+              `<label>通知名</label>` +
+              `<input id="nName">` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>種別</label>` +
+              `<select id="nType">` +
+                `<option value="overdue_tickets">期限超過</option>` +
+                `<option value="missing_assignment">アサイン未入力</option>` +
+                `<option value="sync_error">同期エラー</option>` +
+              `</select>` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>送信先</label>` +
+              `<select id="nChannel">` +
+                `<option value="none">送信しない</option>` +
+                `<option value="email">メール</option>` +
+                `<option value="slack">Slack</option>` +
+              `</select>` +
+            `</div>` +
+            `<div class="field full">` +
+              `<label>宛先メール（カンマ区切り）</label>` +
+              `<input id="nRecipients">` +
+            `</div>` +
+            `<div class="field full">` +
+              `<label>追加メッセージ</label>` +
+              `<textarea id="nMessage" rows="3">` +
+              `</textarea>` +
+            `</div>` +
+            `<div class="field">` +
+              `<label>有効化</label>` +
+              `<select id="nEnabled">` +
+                `<option value="false">無効</option>` +
+                `<option value="true">有効</option>` +
+              `</select>` +
+            `</div>` +
+          `</div>` +
+          `<div class="actions">` +
+            `<button class="primary" onclick="saveNotification()">保存</button>` +
+          `</div>` +
+        `</div>` +
+      `</section>` +
+      `<section class="panel">` +
+        `<div class="panel-head">` +
+          `<div class="panel-title">登録済みルール</div>` +
+        `</div>` +
+        `<div class="panel-body">` +
+          `${d.rules.length ? d.rules.map(r => (
+            `<div class="stat-line">` +
+              `<span>` +
+                `<strong>${esc(r.name)}</strong>` +
+                `<br>` +
+                `<small class="muted">${esc(r.type)} / ${esc(r.channel)}</small>` +
+              `</span>` +
+              `<span class="pill ${String(r.enabled) === 'true' ? 'green' : ''}">` +
+                `${String(r.enabled) === 'true' ? '有効' : '無効'}` +
+              `</span>` +
+            `</div>`
+          )).join('') : '<div class="empty">ルールはありません</div>'}` +
+        `</div>` +
+      `</section>` +
+    `</div>`
+  );
+}
+
+async function saveNotification() {
+  const input = {
+    name: $('#nName').value,
+    type: $('#nType').value,
+    channel: $('#nChannel').value,
+    recipients: $('#nRecipients').value,
+    message: $('#nMessage').value,
+    enabled: $('#nEnabled').value === 'true',
+    schedule: 'daily',
+    sendTime: '09:00'
+  };
+  busy(true, '通知ルールを保存しています...');
+  try {
+    await rpc('saveNotificationRule', input);
+    toast('通知ルールを保存しました');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function renderSettings(s) {
+  state.cache.settings = s;
+  $('#content').innerHTML = (
+    `<section class="panel">` +
+      `<div class="panel-head">` +
+        `<div>` +
+          `<div class="panel-title">アプリ設定</div>` +
+          `<div class="panel-sub">APIキーとWebhook URLは保存後に再表示しません</div>` +
+        `</div>` +
+        `<span class="pill ${s.backlogApiKeyConfigured ? 'green' : 'amber'}">` +
+          `Backlog API ${s.backlogApiKeyConfigured ? '設定済み' : '未設定'}` +
+        `</span>` +
+      `</div>` +
+      `<div class="panel-body">` +
+        `<div class="form-grid">` +
+          `<div class="field">` +
+            `<label>許可ドメイン</label>` +
+            `<input id="sDomain" value="${esc(s.allowedDomain)}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>管理者Googleグループ</label>` +
+            `<input id="sAdminGroup" value="${esc(s.adminGroupEmail)}">` +
+          `</div>` +
+          `<div class="field full">` +
+            `<label>管理者メール（カンマ区切り）</label>` +
+            `<input id="sAdmins" value="${esc(s.adminEmails)}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>BacklogスペースURL</label>` +
+            `<input id="sSpace" value="${esc(s.backlogSpaceUrl)}" placeholder="https://example.backlog.jp">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>プロジェクトキー（カンマ区切り）</label>` +
+            `<input id="sProjects" value="${esc(s.backlogProjectKeys)}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>Backlog APIキー</label>` +
+            `<input id="sApiKey" type="password" placeholder="${s.backlogApiKeyConfigured ? '変更する場合のみ入力' : '入力してください'}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>Slack Webhook URL</label>` +
+            `<input id="sSlack" type="password" placeholder="${s.slackWebhookConfigured ? '変更する場合のみ入力' : '任意'}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>今季の開始日</label>` +
+            `<input id="sTerm" type="date" value="${esc(s.termStartDate)}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>データストアID</label>` +
+            `<input value="${esc(s.dataSpreadsheetId)}" disabled>` +
+          `</div>` +
+        `</div>` +
+        `<div class="actions">` +
+          `<button class="primary" onclick="saveSettings()">設定を保存</button>` +
+        `</div>` +
+      `</div>` +
+    `</section>` +
+    `<section class="panel" style="margin-top:18px">` +
+      `<div class="panel-head">` +
+        `<div>` +
+          `<div class="panel-title">メンバーとGoogleアカウント</div>` +
+          `<div class="panel-sub">本人入力を許可するにはメールアドレスを登録してください</div>` +
+        `</div>` +
+        `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
+      `</div>` +
+      `<div class="table-wrap">` +
+        `<table class="table" id="memberSettings">` +
+          `<thead>` +
+            `<tr>` +
+              `<th>氏名</th>` +
+              `<th>メール</th>` +
+              `<th>チーム</th>` +
+              `<th>権限</th>` +
+            `</tr>` +
+          `</thead>` +
+          `<tbody>` +
+            `${s.members.map(m => (
+              `<tr data-id="${esc(m.memberId)}" data-skill="${esc(m.skillLevel)}" data-exp="${esc(m.experienceLevel)}" data-speed="${esc(m.speedCoefficient)}" data-level="${esc(m.compositeLevel)}">` +
+                `<td>` +
+                  `<strong>${esc(m.name)}</strong>` +
+                `</td>` +
+                `<td>` +
+                  `<input class="m-email" type="email" value="${esc(m.email)}">` +
+                `</td>` +
+                `<td>` +
+                  `<input class="m-team" value="${esc(m.team)}">` +
+                `</td>` +
+                `<td>` +
+                  `<select class="m-role">` +
+                    `<option value="member" ${m.role !== 'admin' ? 'selected' : ''}>メンバー</option>` +
+                    `<option value="admin" ${m.role === 'admin' ? 'selected' : ''}>管理者</option>` +
+                  `</select>` +
+                `</td>` +
+              `</tr>`
+            )).join('')}` +
+          `</tbody>` +
+        `</table>` +
+      `</div>` +
+    `</section>` +
+    `<section class="panel" style="margin-top:18px">` +
+      `<div class="panel-head">` +
+        `<div class="panel-title">稼働状態</div>` +
+      `</div>` +
+      `<div class="panel-body">` +
+        `<div class="stat-line">` +
+          `<span>最終同期</span>` +
+          `<strong>${esc(s.lastSyncAt || '未同期')}</strong>` +
+        `</div>` +
+        `<div class="stat-line">` +
+          `<span>同期状態</span>` +
+          `<strong>${esc(s.lastSyncStatus || '-')}</strong>` +
+        `</div>` +
+        `<div class="stat-line">` +
+          `<span>アクセス方式</span>` +
+          `<strong>W2ドメイン限定 / デプロイした管理者として実行</strong>` +
+        `</div>` +
+      `</div>` +
+    `</section>`
+  );
+}
+
+async function saveSettings() {
+  const input = {
+    allowedDomain: $('#sDomain').value,
+    adminGroupEmail: $('#sAdminGroup').value,
+    adminEmails: $('#sAdmins').value,
+    backlogSpaceUrl: $('#sSpace').value,
+    backlogProjectKeys: $('#sProjects').value,
+    backlogApiKey: $('#sApiKey').value,
+    slackWebhookUrl: $('#sSlack').value,
+    termStartDate: $('#sTerm').value
+  };
+  busy(true, '設定を保存しています...');
+  try {
+    await rpc('saveAppSettings', input);
+    toast('設定を保存しました');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+async function saveMemberSettings() {
+  const source = state.cache.settings.members;
+  const rows = $$('#memberSettings tbody tr').map(tr => {
+    const old = source.find(m => m.memberId === tr.dataset.id);
+    return {
+      ...old,
+      email: tr.querySelector('.m-email').value,
+      team: tr.querySelector('.m-team').value,
+      role: tr.querySelector('.m-role').value,
+      active: true
+    };
+  });
+  busy(true, 'メンバー設定を保存しています...');
+  try {
+    await rpc('saveMembers', rows);
+    toast('メンバー設定を保存しました');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+async function manualSync() {
+  busy(true, 'Backlogを同期しています...');
+  try {
+    const r = await rpc('manualBacklogSync');
+    toast(r.continued ? '同期を継続実行します' : '同期完了。集計は約1〜2分後に反映されます');
+    await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+</script>
