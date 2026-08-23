@@ -1,10 +1,6 @@
-name: GAS 自動デプロイ
+name: GAS 手動デプロイ
 
 on:
-  push:
-    branches:
-      - main
-
   workflow_dispatch:
 
 permissions:
