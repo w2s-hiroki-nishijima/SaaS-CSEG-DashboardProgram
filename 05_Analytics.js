@@ -1,6 +1,12 @@
 /** Dashboard, performance, target and aggregate calculations. */
 function getMonthTargets_(month) {
-  return readRows_('MonthlyTargets').filter(function(row) { return String(row.month) === month; });
+  const teamByName = {};
+  readMonthlyTeamMembership_(month).forEach(function(row) { teamByName[row.name] = row.team; });
+  return readRows_('MonthlyTargets').filter(function(row) { return String(row.month) === month; }).map(function(row) {
+    const out = Object.assign({}, row);
+    if (Object.prototype.hasOwnProperty.call(teamByName, out.memberName)) out.team = teamByName[out.memberName];
+    return out;
+  });
 }
 
 function buildDashboardData_(month) {
@@ -31,7 +37,7 @@ function buildDashboardData_(month) {
 function buildPerformanceData_(month) {
   const snapshot = getMonthlyIssueSnapshot_(month);
   const targets = getMonthTargets_(month);
-  const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });
+  const members = getMembersForMonth_(month);
   const byMember = {};
   members.forEach(function(m) {
     byMember[m.name] = {
@@ -48,7 +54,7 @@ function buildPerformanceData_(month) {
     const source = snapshot.members[name];
     if (!byMember[name]) byMember[name] = emptyMemberMetric_(name, source.team);
     const metric = byMember[name];
-    metric.team = source.team || metric.team;
+    if (!metric.team) metric.team = source.team || '';
     metric.completedCount += toNumber_(source.completedCount);
     metric.points += toNumber_(source.points);
     metric.emergencyCount += toNumber_(source.emergencyCount);
@@ -73,7 +79,7 @@ function buildPerformanceData_(month) {
 }
 
 function buildTargetData_(month) {
-  const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });
+  const members = getMembersForMonth_(month);
   const current = readRows_('MonthlyTargets').filter(function(r) { return String(r.month) === month; });
   const byId = {};
   current.forEach(function(r) { byId[String(r.memberId)] = r; });
@@ -120,8 +126,14 @@ function buildAggregateData_(month) {
 }
 
 function buildAssignmentData_(month, user) {
-  const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });
-  const rows = readRows_('AssignmentEntries').filter(function(r) { return String(r.month) === month; });
+  const members = getMembersForMonth_(month);
+  const teamById = {};
+  members.forEach(function(m) { teamById[String(m.memberId)] = m.team; });
+  const rows = readRows_('AssignmentEntries').filter(function(r) { return String(r.month) === month; }).map(function(r) {
+    const out = Object.assign({}, r);
+    if (Object.prototype.hasOwnProperty.call(teamById, String(out.memberId))) out.team = teamById[String(out.memberId)];
+    return out;
+  });
   rows.sort(function(a, b) { return String(b.weekStart).localeCompare(String(a.weekStart)); });
   return { month: month, user: user, members: members, rows: rows };
 }

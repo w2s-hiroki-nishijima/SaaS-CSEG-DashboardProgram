@@ -94,7 +94,7 @@ async function openPage(page) {
   const meta = state.boot.pages.find(p => p.id === page);
   $('#pageTitle').textContent = meta ? meta.label : '';
   $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
-  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications', 'settings'].includes(page));
+  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications'].includes(page));
   busy(true, 'データを読み込んでいます...');
   try {
     await renderPage(page);
@@ -127,7 +127,7 @@ async function renderPage(page) {
   if (page === 'notifications')
     return renderNotifications(await rpc('getNotificationView'));
   if (page === 'settings')
-    return renderSettings(await rpc('getSettingsView'));
+    return renderSettings(await rpc('getSettingsView', month));
 }
 
 function kpi(label, value, sub, cls = '') {
@@ -881,7 +881,7 @@ function renderSettings(s) {
       `<div class="panel-head">` +
         `<div>` +
           `<div class="panel-title">メンバーとGoogleアカウント</div>` +
-          `<div class="panel-sub">本人入力を許可するにはメールアドレスを登録してください</div>` +
+          `<div class="panel-sub">${esc(s.month)} の所属チームを <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
         `</div>` +
         `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
       `</div>` +
@@ -978,8 +978,8 @@ async function saveMemberSettings() {
   });
   busy(true, 'メンバー設定を保存しています...');
   try {
-    await rpc('saveMembers', rows);
-    toast('メンバー設定を保存しました');
+    await rpc('saveMonthlyMemberSettings', { month: $('#globalMonth').value, rows });
+    toast($('#globalMonth').value + ' の所属チームとメンバー設定を保存しました');
     await reloadCurrentPage();
   } catch (e) {
     toast(e.message, true);

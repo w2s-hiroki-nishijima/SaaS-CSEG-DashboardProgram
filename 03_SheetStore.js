@@ -130,3 +130,57 @@ function formatDataSheet_(sheet, columnCount) {
 function invalidateAllCaches_() {
   CacheService.getScriptCache().removeAll(Object.keys(CSEG_SHEETS).map(function(name) { return 'rows:' + name; }));
 }
+
+/** Returns the legacy monthly sheet title used by the team assignment workbook. */
+function monthlyTeamSheetName_(month) {
+  const key = monthKey_(month);
+  return Number(key.slice(0, 4)) + '年' + Number(key.slice(5, 7)) + '月';
+}
+
+function getMonthlyTeamSheet_(month) {
+  const sheetName = monthlyTeamSheetName_(month);
+  const sheet = SpreadsheetApp.openById(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID).getSheetByName(sheetName);
+  if (!sheet) throw new Error(sheetName + ' の所属チームシートが見つかりません。元シートに月別タブを作成してください。');
+  return sheet;
+}
+
+/** Reads member name (A) and team (C) from the legacy monthly workbook. */
+function readMonthlyTeamMembership_(month) {
+  const sheet = getMonthlyTeamSheet_(month);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, 3).getDisplayValues()
+    .map(function(row, index) {
+      return { rowNumber: index + 2, name: String(row[0] || '').trim(), team: String(row[2] || '').trim() };
+    })
+    .filter(function(row) { return row.name; });
+}
+
+/** Applies the selected month's team to the app member master without changing the master itself. */
+function getMembersForMonth_(month) {
+  const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });
+  const byName = {};
+  readMonthlyTeamMembership_(month).forEach(function(row) { byName[row.name] = row.team; });
+  return members.map(function(member) {
+    const out = Object.assign({}, member);
+    if (Object.prototype.hasOwnProperty.call(byName, member.name)) out.team = byName[member.name];
+    return out;
+  });
+}
+
+/** Writes team values only to column C, preserving formulas and formatting in the legacy sheet. */
+function saveMonthlyTeamMembership_(month, rows) {
+  const sheet = getMonthlyTeamSheet_(month);
+  const existing = readMonthlyTeamMembership_(month);
+  const rowByName = {};
+  existing.forEach(function(row) { rowByName[row.name] = row.rowNumber; });
+  const missing = [];
+  rows.forEach(function(row) {
+    const name = String(row.name || '').trim();
+    if (!rowByName[name]) missing.push(name);
+  });
+  if (missing.length) throw new Error('月別シートに存在しないメンバーがあります: ' + missing.join('、'));
+  rows.forEach(function(row) {
+    sheet.getRange(rowByName[String(row.name).trim()], 3).setValue(String(row.team || '').trim());
+  });
+}

@@ -3,7 +3,7 @@ function saveMonthlyTargets(payload) {
   const user = assertAdmin_();
   if (!payload || !Array.isArray(payload.rows)) throw new Error('保存データが不正です。');
   const month = monthKey_(payload.month);
-  const members = readRows_('Members');
+  const members = getMembersForMonth_(month);
   const rows = payload.rows.map(function(input) {
     const member = members.find(function(m) { return String(m.memberId) === String(input.memberId); });
     if (!member) throw new Error('メンバーが見つかりません: ' + input.memberId);
@@ -26,10 +26,10 @@ function saveMonthlyTargets(payload) {
 function saveAssignmentEntry(input) {
   if (!input || !input.memberId) throw new Error('メンバーを選択してください。');
   const user = assertMemberWrite_(input.memberId);
-  const member = readRows_('Members').find(function(m) { return String(m.memberId) === String(input.memberId); });
-  if (!member) throw new Error('メンバーが見つかりません。');
   const weekStart = dateKey_(input.weekStart);
   if (!weekStart) throw new Error('週開始日を入力してください。');
+  const member = getMembersForMonth_(weekStart.slice(0, 7)).find(function(m) { return String(m.memberId) === String(input.memberId); });
+  if (!member) throw new Error('メンバーが見つかりません。');
   const entry = {
     entryId: input.entryId || Utilities.getUuid(), weekStart: weekStart, month: weekStart.slice(0, 7),
     memberId: member.memberId, memberName: member.name, team: member.team,
@@ -103,7 +103,16 @@ function saveAppSettings(input) {
   if (input.termStartDate) props.setProperty('TERM_START_DATE', dateKey_(input.termStartDate));
   clearRuntimeConfigMemo_();
   appendRows_('Settings', [{ key: 'LAST_SETTINGS_UPDATE', value: nowIso_(), description: '設定画面の最終更新', updatedAt: nowIso_(), updatedBy: user.email }]);
-  return { ok: true, settings: getSettingsView() };
+  return { ok: true };
+}
+
+function saveMonthlyMemberSettings(payload) {
+  assertAdmin_();
+  if (!payload || !Array.isArray(payload.rows)) throw new Error('メンバーデータが不正です。');
+  const month = monthKey_(payload.month);
+  saveMonthlyTeamMembership_(month, payload.rows);
+  saveMembers(payload.rows);
+  return { ok: true, settings: buildSettingsView_(month) };
 }
 
 function saveMembers(inputRows) {

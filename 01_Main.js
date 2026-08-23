@@ -64,7 +64,7 @@ function getNavigationPrefetchData(month) {
     pages.targets = buildTargetData_(targetMonth);
     pages.aggregate = buildAggregateData_(targetMonth);
     pages.notifications = { rules: readRows_('NotificationRules') };
-    pages.settings = buildSettingsView_();
+    pages.settings = buildSettingsView_(targetMonth);
   }
   return { month: targetMonth, pages: pages };
 }
@@ -99,14 +99,17 @@ function getNotificationView() {
   return { rules: readRows_('NotificationRules') };
 }
 
-function getSettingsView() {
+function getSettingsView(month) {
   assertAdmin_();
-  return buildSettingsView_();
+  return buildSettingsView_(monthKey_(month));
 }
 
-function buildSettingsView_() {
+function buildSettingsView_(month) {
   const cfg = getRuntimeConfig_();
+  const targetMonth = monthKey_(month);
   return {
+    month: targetMonth,
+    monthlyTeamSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
     allowedDomain: cfg.allowedDomain,
     adminEmails: cfg.adminEmails.join(', '),
     adminGroupEmail: cfg.adminGroupEmail,
@@ -118,6 +121,6 @@ function buildSettingsView_() {
     dataSpreadsheetId: cfg.dataSpreadsheetId,
     lastSyncAt: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_AT') || '',
     lastSyncStatus: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_STATUS') || '',
-    members: readRows_('Members').filter(function(r) { return toBoolean_(r.active); })
+    members: getMembersForMonth_(targetMonth)
   };
 }
