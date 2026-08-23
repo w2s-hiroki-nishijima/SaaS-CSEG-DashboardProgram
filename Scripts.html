@@ -3,7 +3,10 @@ const state = {
   boot: null,
   page: 'dashboard',
   cache: {},
-  skillMemberId: ''
+  skillMemberId: '',
+  initialRoute: null,
+  restoringHistory: false,
+  entering: false
 };
 
 const $ = s => document.querySelector(s);
@@ -44,25 +47,61 @@ function toast(msg, error = false) {
   toast.t = setTimeout(() => el.className = 'toast', 3500);
 }
 
+function routeFromLocation(location) {
+  const parameter = location && location.parameter ? location.parameter : {};
+  return {
+    page: String(parameter.page || 'dashboard'),
+    month: /^\d{4}-\d{2}$/.test(String(parameter.month || '')) ? String(parameter.month) : '',
+    explicit: Boolean(parameter.page || parameter.month)
+  };
+}
+
+function getInitialRoute() {
+  if (state.initialRoute) return Promise.resolve(state.initialRoute);
+  return new Promise(resolve => google.script.url.getLocation(location => {
+    state.initialRoute = routeFromLocation(location);
+    resolve(state.initialRoute);
+  }));
+}
+
+function updateRoute(historyMode = 'push') {
+  if (!state.boot || state.restoringHistory) return;
+  const params = { page: state.page, month: $('#globalMonth').value || state.boot.currentMonth };
+  const historyState = { page: params.page, month: params.month };
+  if (historyMode === 'replace') google.script.history.replace(historyState, params, '');
+  else if (historyMode === 'push') google.script.history.push(historyState, params, '');
+}
+
 async function enterDashboard() {
+  if (state.entering) return;
+  state.entering = true;
   busy(true, 'アプリを起動しています...');
   try {
-    const initial = await rpc('getInitialView');
+    const results = await Promise.all([rpc('getInitialView'), getInitialRoute()]);
+    const initial = results[0];
+    const route = results[1];
     state.boot = initial.boot;
-    state.page = 'dashboard';
-    $('#globalMonth').value = state.boot.currentMonth;
     buildNav();
+    const allowedPages = state.boot.pages.filter(p => !p.admin || state.boot.user.isAdmin).map(p => p.id);
+    state.page = allowedPages.includes(route.page) ? route.page : 'dashboard';
+    $('#globalMonth').value = route.month || state.boot.currentMonth;
     renderUser();
     $('#landing').classList.add('hidden');
     $('#app').classList.remove('hidden');
-    $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === 'dashboard'));
-    $('#pageTitle').textContent = 'ダッシュボード';
-    $('#pageEyebrow').textContent = 'OVERVIEW';
-    $('#globalMonth').closest('label').classList.remove('hidden');
-    renderDashboard(initial.dashboard);
+    if (state.page === 'dashboard' && $('#globalMonth').value === state.boot.currentMonth) {
+      $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === 'dashboard'));
+      $('#pageTitle').textContent = 'ダッシュボード';
+      $('#pageEyebrow').textContent = 'OVERVIEW';
+      $('#globalMonth').closest('label').classList.remove('hidden');
+      renderDashboard(initial.dashboard);
+      updateRoute('replace');
+    } else {
+      await openPage(state.page, 'replace');
+    }
   } catch (e) {
     toast(e.message, true);
   } finally {
+    state.entering = false;
     busy(false);
   }
 }
@@ -88,8 +127,11 @@ function renderUser() {
   $('#userBadge').innerHTML = `<strong>${esc(u.name)}</strong>${esc(u.email)}${u.isAdmin ? ' · 管理者' : ''}`;
 }
 
-async function openPage(page) {
+async function openPage(page, historyMode = 'push') {
+  const allowed = state.boot.pages.some(p => p.id === page && (!p.admin || state.boot.user.isAdmin));
+  if (!allowed) page = 'dashboard';
   state.page = page;
+  updateRoute(historyMode);
   $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
   const meta = state.boot.pages.find(p => p.id === page);
   $('#pageTitle').textContent = meta ? meta.label : '';
@@ -106,8 +148,8 @@ async function openPage(page) {
   }
 }
 
-function reloadCurrentPage() {
-  openPage(state.page);
+function reloadCurrentPage(pushHistory = false) {
+  openPage(state.page, pushHistory ? 'push' : 'none');
 }
 
 async function renderPage(page) {
@@ -1022,5 +1064,30 @@ async function manualSync() {
     busy(false);
   }
 }
+
+async function restoreRoute(location, historyState) {
+  if (!state.boot) return;
+  const route = routeFromLocation(location);
+  const requestedPage = String((historyState && historyState.page) || route.page || 'dashboard');
+  const requestedMonth = String((historyState && historyState.month) || route.month || state.boot.currentMonth);
+  state.restoringHistory = true;
+  try {
+    $('#globalMonth').value = /^\d{4}-\d{2}$/.test(requestedMonth) ? requestedMonth : state.boot.currentMonth;
+    await openPage(requestedPage, 'none');
+  } finally {
+    state.restoringHistory = false;
+  }
+}
+
+function initializeRouting() {
+  google.script.history.setChangeHandler(event => {
+    restoreRoute(event.location, event.state).catch(error => toast(error.message, true));
+  });
+  getInitialRoute().then(route => {
+    if (route.explicit) enterDashboard();
+  }).catch(error => toast(error.message, true));
+}
+
+initializeRouting();
 
 </script>

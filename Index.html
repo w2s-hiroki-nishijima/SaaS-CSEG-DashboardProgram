@@ -30,7 +30,7 @@
     <main class="main">
       <header class="topbar">
         <div><p id="pageEyebrow" class="eyebrow">OVERVIEW</p><h2 id="pageTitle">ダッシュボード</h2></div>
-        <div class="top-actions"><label class="month-control"><span>対象月</span><input id="globalMonth" type="month" onchange="reloadCurrentPage()"></label><button id="syncButton" class="secondary admin-only" onclick="manualSync()">↻ Backlog同期</button></div>
+        <div class="top-actions"><label class="month-control"><span>対象月</span><input id="globalMonth" type="month" onchange="reloadCurrentPage(true)"></label><button id="syncButton" class="secondary admin-only" onclick="manualSync()">↻ Backlog同期</button></div>
       </header>
       <div id="content" class="content"></div>
     </main>
