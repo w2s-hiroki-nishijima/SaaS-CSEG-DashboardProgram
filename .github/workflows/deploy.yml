@@ -1,0 +1,50 @@
+name: GAS 自動デプロイ
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gas-production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: GitHub のコードを取得
+        uses: actions/checkout@v4
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: clasp をインストール
+        run: npm install --global @google/clasp@3
+
+      - name: clasp の認証情報を設定
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          CLASP_JSON: ${{ secrets.CLASP_JSON }}
+        run: |
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          printf '%s' "$CLASP_JSON" > .clasp.json
+
+      - name: GAS にコードを反映
+        run: clasp push --force
+
+      - name: 既存の Web アプリを再デプロイ
+        env:
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+        run: |
+          clasp create-deployment \
+            --deploymentId "$GAS_DEPLOYMENT_ID" \
+            --description "GitHub Actions: $GITHUB_SHA"
