@@ -95,6 +95,8 @@ function buildTargetData_(month) {
   return {
     month: month,
     baseHours: CSEG_APP.TARGET_BASE_HOURS,
+    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
+    assignmentSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.ASSIGNMENT_SPREADSHEET_ID + '/edit',
     rows: current.map(function(row) {
       return {
         memberId: row.memberId, memberName: row.memberName, team: row.team,
@@ -131,16 +133,14 @@ function buildAggregateData_(month) {
 }
 
 function buildAssignmentData_(month, user) {
-  const members = getMembersForMonth_(month);
-  const teamById = {};
-  members.forEach(function(m) { teamById[String(m.memberId)] = m.team; });
-  const rows = readRows_('AssignmentEntries').filter(function(r) { return String(r.month) === month; }).map(function(r) {
-    const out = Object.assign({}, r);
-    if (Object.prototype.hasOwnProperty.call(teamById, String(out.memberId))) out.team = teamById[String(out.memberId)];
-    return out;
+  const rows = readMonthlyAssignmentRows_(month);
+  const members = rows.map(function(row) {
+    return { memberId: row.memberId, name: row.memberName, team: row.team };
   });
-  rows.sort(function(a, b) { return String(b.weekStart).localeCompare(String(a.weekStart)); });
-  return { month: month, user: user, members: members, rows: rows };
+  return {
+    month: month, user: user, members: members, rows: rows,
+    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.ASSIGNMENT_SPREADSHEET_ID + '/edit'
+  };
 }
 
 function buildSkillData_(user) {

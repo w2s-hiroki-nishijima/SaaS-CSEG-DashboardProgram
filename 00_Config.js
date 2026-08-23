@@ -6,6 +6,7 @@ const CSEG_APP = Object.freeze({
   ALLOWED_DOMAIN: 'w2solution.co.jp',
   DEFAULT_DATA_SPREADSHEET_ID: '1nWxKowOvJeOzz1HFzyhieTvcapMn3UXl5ZDTcWyYRiY',
   MONTHLY_TEAM_SPREADSHEET_ID: '1vS10vT-clLJFskKrNNox4pE8ROtwnaFoIm5MDThnkv4',
+  ASSIGNMENT_SPREADSHEET_ID: '1Dy6dgPXH7Jnrhssa4TdgJ62ASMwaUC6gHW2xiW5-cEI',
   DEFAULT_ADMIN_MEMBER_NAME: '西島弘騎',
   CLOSED_STATUS_NAMES: ['完了', '処理済み', 'Closed', 'Done', 'Resolved'],
   BACKLOG_PAGE_SIZE: 100,

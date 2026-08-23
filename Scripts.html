@@ -480,25 +480,22 @@ async function addSkillMaster() {
 function renderAssignments(d) {
   state.cache.assignments = d;
   const own = d.user.memberId;
-  const options = d.members.map(m => `<option value="${esc(m.memberId)}" ${m.memberId === own ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
+  const editableMembers = d.user.isAdmin ? d.members : d.members.filter(m => String(m.memberId) === String(own));
+  const options = editableMembers.map(m => `<option value="${esc(m.memberId)}" ${String(m.memberId) === String(own) ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
   $('#content').innerHTML = (
     `<div class="grid-2">` +
       `<section class="panel">` +
         `<div class="panel-head">` +
           `<div>` +
-            `<div class="panel-title">週次実績を入力</div>` +
-            `<div class="panel-sub">対応・改善・特殊対応を週単位で記録</div>` +
+            `<div class="panel-title">${esc(d.month)} 実績アサインを入力</div>` +
+            `<div class="panel-sub">入力内容はアサイン活用報告シートのB〜D列へ保存されます</div>` +
           `</div>` +
         `</div>` +
         `<div class="panel-body">` +
           `<div class="form-grid">` +
             `<div class="field">` +
               `<label>メンバー</label>` +
-              `<select id="aMember">${options}</select>` +
-            `</div>` +
-            `<div class="field">` +
-              `<label>週開始日</label>` +
-              `<input id="aWeek" type="date">` +
+              `<select id="aMember" onchange="loadAssignmentInputs()">${options}</select>` +
             `</div>` +
             `<div class="field">` +
               `<label>対応実績（h）</label>` +
@@ -512,24 +509,16 @@ function renderAssignments(d) {
               `<label>特殊対応実績（h）</label>` +
               `<input id="aSpecial" type="number" min="0" step="0.5" value="0">` +
             `</div>` +
-            `<div class="field">` +
-              `<label>予定時間（h）</label>` +
-              `<input id="aPlanned" type="number" min="0" step="0.5" value="0">` +
-            `</div>` +
-            `<div class="field full">` +
-              `<label>メモ</label>` +
-              `<textarea id="aNote" rows="3">` +
-              `</textarea>` +
-            `</div>` +
           `</div>` +
           `<div class="actions">` +
-            `<button class="primary" onclick="saveAssignment()">保存</button>` +
+            `<button class="primary" onclick="saveAssignment()" ${options ? '' : 'disabled'}>実績を保存</button>` +
+            `<a class="secondary" style="text-decoration:none" href="${esc(d.spreadsheetUrl)}" target="_blank" rel="noopener">元シートを開く</a>` +
           `</div>` +
         `</div>` +
       `</section>` +
       `<section class="panel">` +
         `<div class="panel-head">` +
-          `<div class="panel-title">今月の入力状況</div>` +
+          `<div class="panel-title">今月の予定・実績</div>` +
         `</div>` +
         `<div class="panel-body">${assignmentSummary(d.rows)}</div>` +
       `</section>` +
@@ -539,27 +528,33 @@ function renderAssignments(d) {
         `<table class="table">` +
           `<thead>` +
             `<tr>` +
-              `<th>週</th>` +
               `<th>メンバー</th>` +
               `<th>チーム</th>` +
-              `<th>対応</th>` +
-              `<th>改善</th>` +
-              `<th>特殊</th>` +
-              `<th>予定</th>` +
-              `<th>更新者</th>` +
+              `<th>対応実績</th>` +
+              `<th>改善実績</th>` +
+              `<th>特殊対応実績</th>` +
+              `<th>実績合計</th>` +
+              `<th>月初予定</th>` +
+              `<th>予定調整</th>` +
+              `<th>予定合計</th>` +
+              `<th>残アサイン</th>` +
+              `<th>最終更新</th>` +
             `</tr>` +
           `</thead>` +
           `<tbody>` +
             `${d.rows.map(r => (
               `<tr>` +
-                `<td>${esc(r.weekStart)}</td>` +
                 `<td>${esc(r.memberName)}</td>` +
                 `<td>${esc(r.team)}</td>` +
                 `<td>${num(r.responseHours, 1)}</td>` +
                 `<td>${num(r.improvementHours, 1)}</td>` +
                 `<td>${num(r.specialHours, 1)}</td>` +
-                `<td>${num(r.plannedHours, 1)}</td>` +
-                `<td>${esc(r.updatedBy)}</td>` +
+                `<td><strong>${num(r.actualHours, 1)}</strong></td>` +
+                `<td>${num(r.plannedStartHours, 1)}</td>` +
+                `<td>${num(r.plannedAdjustmentHours, 1)}</td>` +
+                `<td><strong>${num(r.plannedHours, 1)}</strong></td>` +
+                `<td>${num(r.remainingHours, 1)}</td>` +
+                `<td>${esc(r.updatedAt || '-')}</td>` +
               `</tr>`
             )).join('')}` +
           `</tbody>` +
@@ -567,11 +562,22 @@ function renderAssignments(d) {
       `</div>` +
     `</section>`
   );
-  $('#aWeek').value = getMondayKey(new Date());
+  loadAssignmentInputs();
+}
+
+function loadAssignmentInputs() {
+  const select = $('#aMember');
+  if (!select || !state.cache.assignments) return;
+  const row = state.cache.assignments.rows.find(r => String(r.memberId) === String(select.value));
+  if (!row) return;
+  $('#aResponse').value = Number(row.responseHours || 0);
+  $('#aImprovement').value = Number(row.improvementHours || 0);
+  $('#aSpecial').value = Number(row.specialHours || 0);
 }
 
 function assignmentSummary(rows) {
-  const total = rows.reduce((a, r) => a + Number(r.responseHours || 0) + Number(r.improvementHours || 0) + Number(r.specialHours || 0), 0);
+  const total = rows.reduce((a, r) => a + Number(r.actualHours || 0), 0);
+  const planned = rows.reduce((a, r) => a + Number(r.plannedHours || 0), 0);
   const members = new Set(rows.map(r => r.memberId)).size;
   return (
     `<div class="kpi-value">${num(total, 1)} h</div>` +
@@ -580,8 +586,8 @@ function assignmentSummary(rows) {
       `<strong>${members}名</strong>` +
     `</div>` +
     `<div class="stat-line">` +
-      `<span>入力レコード</span>` +
-      `<strong>${rows.length}件</strong>` +
+      `<span>予定合計</span>` +
+      `<strong>${num(planned, 1)} h</strong>` +
     `</div>`
   );
 }
@@ -596,12 +602,10 @@ function getMondayKey(d) {
 async function saveAssignment() {
   const input = {
     memberId: $('#aMember').value,
-    weekStart: $('#aWeek').value,
+    month: $('#globalMonth').value,
     responseHours: $('#aResponse').value,
     improvementHours: $('#aImprovement').value,
-    specialHours: $('#aSpecial').value,
-    plannedHours: $('#aPlanned').value,
-    note: $('#aNote').value
+    specialHours: $('#aSpecial').value
   };
   busy(true, 'アサイン実績を保存しています...');
   try {
@@ -624,7 +628,10 @@ function renderTargets(d) {
           `<div class="panel-title">${esc(d.month)} メンバー目標件数</div>` +
           `<div class="panel-sub">目標件数スプレッドシートを参照｜実質スピード ×（アサイン時間 − マイナス − 調整）÷ ${d.baseHours}</div>` +
         `</div>` +
-        `<button class="primary" onclick="saveTargets()">シートへ確定保存</button>` +
+        `<div class="actions">` +
+          `<a class="secondary" style="text-decoration:none" href="${esc(d.assignmentSpreadsheetUrl)}" target="_blank" rel="noopener">アサイン元データ</a>` +
+          `<a class="secondary" style="text-decoration:none" href="${esc(d.spreadsheetUrl)}" target="_blank" rel="noopener">目標件数シート</a>` +
+        `</div>` +
       `</div>` +
       `<div class="table-wrap">` +
         `<table class="table" id="targetTable">` +
@@ -649,15 +656,9 @@ function renderTargets(d) {
                 `<td>${esc(r.team)}</td>` +
                 `<td>${esc(r.skillLevel)}-${esc(String(r.experienceLevel).replace('CSEG', ''))}</td>` +
                 `<td>${num(r.speedCoefficient, 4)}</td>` +
-                `<td>` +
-                  `<input class="t-assignment" type="number" min="0" step="0.5" value="${r.assignmentHours}" oninput="recalcTarget(this)">` +
-                `</td>` +
-                `<td>` +
-                  `<input class="t-minus" type="number" min="0" step="0.5" value="${r.minusHours}" oninput="recalcTarget(this)">` +
-                `</td>` +
-                `<td>` +
-                  `<input class="t-adjust" type="number" min="0" step="0.5" value="${r.adjustmentHours}" oninput="recalcTarget(this)">` +
-                `</td>` +
+                `<td>${num(r.assignmentHours, 1)}</td>` +
+                `<td>${num(r.minusHours, 1)}</td>` +
+                `<td>${num(r.adjustmentHours, 1)}</td>` +
                 `<td class="t-result" data-speed="${r.speedCoefficient}">` +
                   `<strong>${num(r.targetCount, 1)}</strong>` +
                 `</td>` +
@@ -668,34 +669,6 @@ function renderTargets(d) {
       `</div>` +
     `</section>`
   );
-}
-
-function recalcTarget(input) {
-  const tr = input.closest('tr'),
-    speed = Number(tr.querySelector('.t-result').dataset.speed),
-    a = Number(tr.querySelector('.t-assignment').value || 0),
-    m = Number(tr.querySelector('.t-minus').value || 0),
-    x = Number(tr.querySelector('.t-adjust').value || 0);
-  tr.querySelector('.t-result strong').textContent = num(Math.max(0, speed * (a - m - x) / 5.5), 1);
-}
-
-async function saveTargets() {
-  const rows = $$('#targetTable tbody tr').map(tr => ({
-    memberId: tr.dataset.id,
-    assignmentHours: tr.querySelector('.t-assignment').value,
-    minusHours: tr.querySelector('.t-minus').value,
-    adjustmentHours: tr.querySelector('.t-adjust').value
-  }));
-  busy(true, '目標件数シートへ保存しています...');
-  try {
-    await rpc('saveMonthlyTargets', { month: $('#globalMonth').value, rows });
-    toast('月別シートへ目標件数を確定保存しました');
-    await reloadCurrentPage();
-  } catch (e) {
-    toast(e.message, true);
-  } finally {
-    busy(false);
-  }
 }
 
 function renderAggregate(d) {

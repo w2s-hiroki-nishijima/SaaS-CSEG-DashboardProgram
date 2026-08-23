@@ -1,29 +1,15 @@
 /** Validated writes from the web application. */
 function saveMonthlyTargets(payload) {
   assertAdmin_();
-  if (!payload || !Array.isArray(payload.rows)) throw new Error('保存データが不正です。');
-  const month = monthKey_(payload.month);
-  saveMonthlyTargetRows_(month, payload.rows);
-  return { ok: true, result: { updated: payload.rows.length }, view: buildTargetData_(month) };
+  throw new Error('目標件数はアサイン活用報告シートから自動計算されるため、管理画面からは変更できません。');
 }
 
 function saveAssignmentEntry(input) {
   if (!input || !input.memberId) throw new Error('メンバーを選択してください。');
   const user = assertMemberWrite_(input.memberId);
-  const weekStart = dateKey_(input.weekStart);
-  if (!weekStart) throw new Error('週開始日を入力してください。');
-  const member = getMembersForMonth_(weekStart.slice(0, 7)).find(function(m) { return String(m.memberId) === String(input.memberId); });
-  if (!member) throw new Error('メンバーが見つかりません。');
-  const entry = {
-    entryId: input.entryId || Utilities.getUuid(), weekStart: weekStart, month: weekStart.slice(0, 7),
-    memberId: member.memberId, memberName: member.name, team: member.team,
-    responseHours: nonNegative_(input.responseHours), improvementHours: nonNegative_(input.improvementHours),
-    specialHours: nonNegative_(input.specialHours), plannedHours: nonNegative_(input.plannedHours),
-    adjustmentHours: nonNegative_(input.adjustmentHours), note: String(input.note || '').slice(0, 1000),
-    updatedAt: nowIso_(), updatedBy: user.email
-  };
-  upsertRows_('AssignmentEntries', [entry], ['entryId']);
-  return { ok: true, entry: entry };
+  const month = monthKey_(input.month);
+  saveMonthlyAssignmentActual_(month, input);
+  return { ok: true, updatedBy: user.email, view: buildAssignmentData_(month, user) };
 }
 
 function saveSkillScore(input) {

@@ -224,6 +224,73 @@ function saveMonthlyTargetRows_(month, rows) {
   });
 }
 
+function monthlyAssignmentSheetName_(month) {
+  return monthlyTeamSheetName_(month) + 'アサイン活用報告';
+}
+
+function getMonthlyAssignmentSheet_(month) {
+  const sheetName = monthlyAssignmentSheetName_(month);
+  const sheet = SpreadsheetApp.openById(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID).getSheetByName(sheetName);
+  if (!sheet) throw new Error(sheetName + ' がアサイン活用報告シートに見つかりません。');
+  return sheet;
+}
+
+function assignmentMemberKey_(value) {
+  return String(value || '').replace(/[\s\u3000]+/g, '').trim();
+}
+
+function readMonthlyAssignmentRows_(month) {
+  const sheet = getMonthlyAssignmentSheet_(month);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 4) return [];
+  const values = sheet.getRange(1, 1, lastRow, 10).getValues();
+  const displays = sheet.getRange(1, 1, lastRow, 10).getDisplayValues();
+  const formulas = sheet.getRange(1, 1, lastRow, 10).getFormulas();
+  const membersByName = {};
+  readRows_('Members').forEach(function(member) {
+    membersByName[assignmentMemberKey_(member.name)] = member;
+  });
+  const teamsByName = {};
+  readMonthlyTeamMembership_(month).forEach(function(row) {
+    teamsByName[assignmentMemberKey_(row.name)] = row.team;
+  });
+  return values.map(function(row, index) {
+    const name = String(displays[index][0] || '').trim();
+    const rowNumber = index + 1;
+    const actualFormula = String(formulas[index][4] || '').trim();
+    const plannedFormula = String(formulas[index][7] || '').trim();
+    if (!name || !actualFormula || !plannedFormula) return null;
+    const key = assignmentMemberKey_(name);
+    const member = membersByName[key] || {};
+    return {
+      rowNumber: rowNumber, month: monthKey_(month),
+      memberId: member.memberId || 'sheet:' + key, memberName: name,
+      team: teamsByName[key] || member.team || '',
+      responseHours: toNumber_(row[1]), improvementHours: toNumber_(row[2]),
+      specialHours: toNumber_(row[3]), actualHours: toNumber_(row[4]),
+      plannedStartHours: toNumber_(row[5]), plannedAdjustmentHours: toNumber_(row[6]),
+      plannedHours: toNumber_(row[7]), remainingHours: toNumber_(row[8]),
+      updatedAt: row[9] instanceof Date
+        ? Utilities.formatDate(row[9], CSEG_APP.TIMEZONE, 'yyyy-MM-dd HH:mm')
+        : String(displays[index][9] || '')
+    };
+  }).filter(Boolean);
+}
+
+function saveMonthlyAssignmentActual_(month, input) {
+  const sheet = getMonthlyAssignmentSheet_(month);
+  const current = readMonthlyAssignmentRows_(month).find(function(row) {
+    return String(row.memberId) === String(input.memberId);
+  });
+  if (!current) throw new Error('アサイン活用報告シートにメンバーが見つかりません。');
+  sheet.getRange(current.rowNumber, 2, 1, 3).setValues([[
+    nonNegative_(input.responseHours), nonNegative_(input.improvementHours), nonNegative_(input.specialHours)
+  ]]);
+  sheet.getRange(current.rowNumber, 10).setValue(new Date());
+  SpreadsheetApp.flush();
+  return current;
+}
+
 /** Applies the selected month's team to the app member master without changing the master itself. */
 function getMembersForMonth_(month) {
   const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });

@@ -34,12 +34,11 @@ function buildNotificationMessage_(rule) {
     return (rule.message || '期限超過チケットがあります。') + '\n件数: ' + overdue.count + '\n' + (overdue.tickets || []).slice(0, 10).map(function(i) { return i.issueKey + ' ' + i.summary; }).join('\n');
   }
   if (rule.type === 'missing_assignment') {
-    const weekStart = getMonday_(new Date());
-    const entries = readRows_('AssignmentEntries').filter(function(r) { return r.weekStart === weekStart; });
-    const entered = {}; entries.forEach(function(r) { entered[r.memberId] = true; });
-    const missing = readRows_('Members').filter(function(m) { return toBoolean_(m.active) && !entered[m.memberId]; });
+    const month = monthKey_();
+    const entries = readMonthlyAssignmentRows_(month);
+    const missing = entries.filter(function(row) { return !row.updatedAt; });
     if (!missing.length) return '';
-    return (rule.message || '今週のアサイン実績が未入力です。') + '\n未入力: ' + missing.map(function(m) { return m.name; }).join('、');
+    return (rule.message || '今月のアサイン実績が未入力です。') + '\n未入力: ' + missing.map(function(row) { return row.memberName; }).join('、');
   }
   if (rule.type === 'sync_error') {
     const status = PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_STATUS') || '';
