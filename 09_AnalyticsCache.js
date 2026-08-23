@@ -5,8 +5,10 @@
  * dashboard/performance/aggregate requests read the small AnalyticsCache sheet.
  */
 let _analyticsCacheMapMemo_ = null;
+let _performanceIssueRowsByKeyMemo_ = null;
 const CSEG_ANALYTICS_REBUILD = Object.freeze({
   STATE_PROPERTY: 'ANALYTICS_REBUILD_STATE',
+  DETAILS_PROPERTY: 'ANALYTICS_REBUILD_PERFORMANCE_DETAILS',
   CHUNK_ROWS: 1500,
   MAX_MILLIS: 3.5 * 60 * 1000
 });
@@ -14,7 +16,15 @@ const CSEG_ANALYTICS_REBUILD = Object.freeze({
 function rebuildAnalyticsCache() {
   assertAdmin_();
   deleteAnalyticsRebuildTriggers_();
+  PropertiesService.getScriptProperties().setProperty(CSEG_ANALYTICS_REBUILD.DETAILS_PROPERTY, 'true');
   return runAnalyticsCacheRebuild_(true, 'manual');
+}
+
+/** Rebuild aggregate metrics immediately after Backlog sync, preserving incrementally updated details. */
+function rebuildAnalyticsCacheAfterBacklogSync() {
+  assertAdmin_();
+  deleteAnalyticsRebuildTriggers_();
+  return runAnalyticsCacheRebuild_(true, 'post-sync');
 }
 
 function rebuildAnalyticsCache_() {
@@ -97,11 +107,13 @@ function runAnalyticsCacheRebuild_(restart, mode) {
 
         const issue = analyticsIssueFromRow_(row, indexes);
         applyIssueToAnalyticsWork_(work, issue, today);
-        Array.prototype.push.apply(performanceIssueRows, buildPerformanceIssueRows_(issue));
+        if (state.rebuildPerformanceIssues) {
+          Array.prototype.push.apply(performanceIssueRows, buildPerformanceIssueRows_(issue));
+        }
 
         state.issueCount++;
       });
-      appendRows_('PerformanceIssues', performanceIssueRows);
+      if (state.rebuildPerformanceIssues) appendRows_('PerformanceIssues', performanceIssueRows);
       state.nextRow += rowCount;
       state.processedRows += rowCount;
     }
@@ -126,7 +138,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     }
 
     const rebuiltAt = nowIso_();
-    finalizePerformanceIssueIndex_(rebuiltAt);
+    if (state.rebuildPerformanceIssues) finalizePerformanceIssueIndex_(rebuiltAt);
     const rows = Object.keys(work.months).sort().map(function(month) {
       return {
         cacheKey: 'month:' + month,
@@ -138,7 +150,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 7, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 8, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -146,6 +158,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     replaceAllRows_('AnalyticsCache', rows);
     _analyticsCacheMapMemo_ = null;
     props.deleteProperty(CSEG_ANALYTICS_REBUILD.STATE_PROPERTY);
+    props.deleteProperty(CSEG_ANALYTICS_REBUILD.DETAILS_PROPERTY);
     props.setProperty('ANALYTICS_CACHE_STATUS', 'success');
     props.setProperty('ANALYTICS_CACHE_REBUILT_AT', rebuiltAt);
     return { ok: true, continued: false, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt };
@@ -164,16 +177,20 @@ function initializeAnalyticsRebuild_(mode) {
     return String(row.cacheKey || '').indexOf('work:') !== 0;
   });
   replaceAllRows_('AnalyticsCache', existing);
-  getSheet_('PerformanceIssues').getRange(1, 1, 1, CSEG_SHEETS.PerformanceIssues.length)
-    .setValues([CSEG_SHEETS.PerformanceIssues]);
-  replaceAllRows_('PerformanceIssues', []);
-  replaceAllRows_('PerformanceIssueIndex', []);
+  const rebuildPerformanceIssues = props.getProperty(CSEG_ANALYTICS_REBUILD.DETAILS_PROPERTY) !== 'false';
+  if (rebuildPerformanceIssues) {
+    getSheet_('PerformanceIssues').getRange(1, 1, 1, CSEG_SHEETS.PerformanceIssues.length)
+      .setValues([CSEG_SHEETS.PerformanceIssues]);
+    replaceAllRows_('PerformanceIssues', []);
+    replaceAllRows_('PerformanceIssueIndex', []);
+  }
   const state = {
     mode: mode,
     nextRow: 2,
     lastRow: issueSheet.getLastRow(),
     processedRows: 0,
     issueCount: 0,
+    rebuildPerformanceIssues: rebuildPerformanceIssues,
     startedAt: nowIso_(),
     sourceUpdatedAt: props.getProperty('BACKLOG_LAST_SYNC_AT') || nowIso_()
   };
@@ -209,12 +226,13 @@ function analyticsEmergencyFlag_(storedValue, customFieldsJson) {
   if (toBoolean_(storedValue)) return true;
   try {
     const accepted = CSEG_APP.CUSTOM_FIELDS.emergencyFlag || [];
+    const acceptedIds = (CSEG_APP.CUSTOM_FIELD_IDS || {}).emergencyFlag || [];
     const fields = JSON.parse(String(customFieldsJson || '[]'));
-    const field = fields.find(function(item) { return accepted.indexOf(String(item.name || '')) >= 0; });
+    const field = fields.find(function(item) {
+      return accepted.indexOf(String(item.name || '')) >= 0 || acceptedIds.indexOf(Number(item.id)) >= 0;
+    });
     if (!field) return false;
-    const value = field.value && typeof field.value === 'object' && field.value.name != null
-      ? field.value.name
-      : field.value;
+    const value = normalizeCustomFieldValue_(field.value);
     return toBoolean_(value);
   } catch (ignore) {
     return false;
@@ -315,10 +333,78 @@ function buildPerformanceIssueRows_(issue) {
   return rows;
 }
 
-function finalizePerformanceIssueIndex_(updatedAt) {
+/** Replace only detail rows for issues returned by Backlog's updated-since query. */
+function updatePerformanceIssuesIncremental_(issues, targetIssueTypes) {
+  if (!issues || !issues.length) return;
+  targetIssueTypes = targetIssueTypes || getAnalyticsTargetIssueTypes_(getSheet_('BacklogIssues').getParent());
+  const changedKeys = {};
+  issues.forEach(function(issue) {
+    const key = String(issue.issueKey || '');
+    if (key) changedKeys[key] = true;
+  });
+
   const sheet = getSheet_('PerformanceIssues');
   const headers = CSEG_SHEETS.PerformanceIssues;
   const lastRow = sheet.getLastRow();
+  if (_performanceIssueRowsByKeyMemo_ === null) {
+    _performanceIssueRowsByKeyMemo_ = {};
+  }
+  if (lastRow >= 2 && Object.keys(_performanceIssueRowsByKeyMemo_).length === 0) {
+    const keyColumn = headers.indexOf('issueKey') + 1;
+    const storedKeys = sheet.getRange(2, keyColumn, lastRow - 1, 1).getDisplayValues();
+    storedKeys.forEach(function(row, offset) {
+      const key = String(row[0] || '');
+      if (!key) return;
+      if (!_performanceIssueRowsByKeyMemo_[key]) _performanceIssueRowsByKeyMemo_[key] = [];
+      _performanceIssueRowsByKeyMemo_[key].push(offset + 2);
+    });
+  }
+  const ranges = [];
+  Object.keys(changedKeys).forEach(function(key) {
+    (_performanceIssueRowsByKeyMemo_[key] || []).forEach(function(rowNumber) {
+      ranges.push('A' + rowNumber + ':' + performanceColumnLetter_(headers.length) + rowNumber);
+    });
+    delete _performanceIssueRowsByKeyMemo_[key];
+  });
+  if (ranges.length) sheet.getRangeList(ranges).clearContent();
+
+  const detailRows = [];
+  issues.forEach(function(issue) {
+    if (!targetIssueTypes.has(String(issue.issueType || '').trim())) return;
+    Array.prototype.push.apply(detailRows, buildPerformanceIssueRows_(issue));
+  });
+  appendRows_('PerformanceIssues', detailRows);
+  clearSheetCache_('PerformanceIssues');
+}
+
+function performanceColumnLetter_(columnNumber) {
+  let value = Number(columnNumber || 0);
+  let result = '';
+  while (value > 0) {
+    value--;
+    result = String.fromCharCode(65 + (value % 26)) + result;
+    value = Math.floor(value / 26);
+  }
+  return result;
+}
+
+function finalizePerformanceIssueIndex_(updatedAt) {
+  const sheet = getSheet_('PerformanceIssues');
+  const headers = CSEG_SHEETS.PerformanceIssues;
+  let lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    replaceAllRows_('PerformanceIssueIndex', []);
+    return;
+  }
+  const compacted = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues().filter(function(row) {
+    return row.some(function(value) { return value !== ''; });
+  }).map(function(row) {
+    const object = {};
+    headers.forEach(function(header, index) { object[header] = row[index]; });
+    return object;
+  });
+  replaceAllRows_('PerformanceIssues', compacted);
+  lastRow = sheet.getLastRow();
   if (lastRow < 2) {
     replaceAllRows_('PerformanceIssueIndex', []);
     return;
@@ -328,11 +414,11 @@ function finalizePerformanceIssueIndex_(updatedAt) {
     { column: 2, ascending: true },
     { column: 4, ascending: true }
   ]);
-  const keys = sheet.getRange(2, 1, lastRow - 1, 2).getDisplayValues();
+  const keys = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
   const indexRows = [];
   let current = null;
   keys.forEach(function(row, offset) {
-    const month = String(row[0] || '');
+    const month = monthKey_(row[0]);
     const memberName = String(row[1] || '');
     const indexKey = month + '\u001f' + memberName;
     if (!current || current.indexKey !== indexKey) {
@@ -346,6 +432,7 @@ function finalizePerformanceIssueIndex_(updatedAt) {
   });
   replaceAllRows_('PerformanceIssueIndex', indexRows);
   clearSheetCache_('PerformanceIssues');
+  _performanceIssueRowsByKeyMemo_ = null;
 }
 
 function loadAnalyticsWork_() {
@@ -607,13 +694,17 @@ function mergeIssueMetric_(map, key, source, name, team) {
   });
 }
 
-function scheduleAnalyticsRebuild_() {
+function scheduleAnalyticsRebuild_(rebuildPerformanceIssues) {
   const handler = 'rebuildAnalyticsCache_';
   const exists = ScriptApp.getProjectTriggers().some(function(trigger) {
     return trigger.getHandlerFunction() === handler;
   });
   if (!exists) ScriptApp.newTrigger(handler).timeBased().after(60 * 1000).create();
-  PropertiesService.getScriptProperties().setProperty('ANALYTICS_CACHE_STATUS', 'pending');
+  const props = PropertiesService.getScriptProperties();
+  const alreadyFull = props.getProperty(CSEG_ANALYTICS_REBUILD.DETAILS_PROPERTY) === 'true';
+  props.deleteProperty(CSEG_ANALYTICS_REBUILD.STATE_PROPERTY);
+  props.setProperty(CSEG_ANALYTICS_REBUILD.DETAILS_PROPERTY, alreadyFull || rebuildPerformanceIssues !== false ? 'true' : 'false');
+  props.setProperty('ANALYTICS_CACHE_STATUS', 'pending');
 }
 
 function getAnalyticsTargetIssueTypes_(spreadsheet) {

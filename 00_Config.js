@@ -312,5 +312,9 @@ function milestonePoint_(value) {
 
 function toBoolean_(value) {
   if (value === true || value === 1) return true;
-  return ['true', '1', 'yes', 'on', '有', 'あり', '対象', '〇', '○'].indexOf(String(value || '').toLowerCase()) >= 0;
+  const normalized = String(value == null ? '' : value)
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '');
+  return ['true', '1', 'yes', 'on', '有', 'あり', '対象', '〇', '○'].indexOf(normalized) >= 0;
 }

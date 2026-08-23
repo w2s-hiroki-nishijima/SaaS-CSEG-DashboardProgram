@@ -83,23 +83,43 @@ function getPerformanceMemberIssues(month, memberName) {
   const index = readRows_('PerformanceIssueIndex').find(function(row) {
     return String(row.indexKey) === indexKey;
   });
-  let rows = index ? readIndexedPerformanceIssues_(index) : [];
+  let rows = index ? readIndexedPerformanceIssues_(index, targetMonth, name) : [];
   if (!rows.length) {
     Array.prototype.push.apply(rows, readPerformanceIssuesFromBacklog_(targetMonth, name));
   }
-  return { month: targetMonth, memberName: name, rows: rows };
+  return {
+    month: targetMonth,
+    memberName: name,
+    rows: (rows || []).map(performanceIssueForClient_)
+  };
 }
 
-function readIndexedPerformanceIssues_(index) {
+function performanceIssueForClient_(row) {
+  const out = {};
+  CSEG_SHEETS.PerformanceIssues.forEach(function(header) {
+    const value = row && row[header];
+    out[header] = value instanceof Date
+      ? Utilities.formatDate(value, CSEG_APP.TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX")
+      : (value == null ? '' : value);
+  });
+  out.emergencyFlag = toBoolean_(out.emergencyFlag);
+  out.point = toNumber_(out.point);
+  return out;
+}
+
+function readIndexedPerformanceIssues_(index, targetMonth, memberName) {
   const sheet = getSheet_('PerformanceIssues');
   const headers = CSEG_SHEETS.PerformanceIssues;
   const startRow = Math.max(2, Math.floor(toNumber_(index.startRow, 2)));
-  const rowCount = Math.max(0, Math.floor(toNumber_(index.rowCount)));
+  const availableRows = Math.max(0, sheet.getLastRow() - startRow + 1);
+  const rowCount = Math.min(availableRows, Math.max(0, Math.floor(toNumber_(index.rowCount))));
   if (!rowCount) return [];
   return sheet.getRange(startRow, 1, rowCount, headers.length).getValues().map(function(values) {
     const row = {};
     headers.forEach(function(header, column) { row[header] = values[column]; });
     return row;
+  }).filter(function(row) {
+    return monthKey_(row.month) === targetMonth && String(row.memberName || '').trim() === memberName;
   });
 }
 

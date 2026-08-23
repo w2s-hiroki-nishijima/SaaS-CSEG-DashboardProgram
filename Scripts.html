@@ -333,12 +333,13 @@ async function togglePerformanceDetails(button, event) {
   content.innerHTML = '<div class="empty">チケットを読み込んでいます...</div>';
   try {
     const data = await rpc('getPerformanceMemberIssues', $('#globalMonth').value, memberRow.dataset.name);
+    const issues = data && Array.isArray(data.rows) ? data.rows : [];
     detailRow.dataset.loaded = 'true';
-    content.innerHTML = data.rows.length ? (
+    content.innerHTML = issues.length ? (
       `<div class="table-wrap"><table class="table">` +
         `<thead><tr><th>件名</th><th>マイルストーン</th><th>緊急</th><th>評価ポイント</th><th>対応日数（TAT）</th></tr></thead>` +
         `<tbody>` +
-        data.rows.map(issue => (
+        issues.map(issue => (
           `<tr>` +
             `<td><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.summary || issue.issueKey)}</a></td>` +
             `<td>${esc(issue.milestone || '-')}</td>` +
@@ -1042,7 +1043,7 @@ async function manualSync() {
       toast('Backlog同期を継続実行します');
     } else {
       busy(true, 'Backlog同期完了。実績を再集計しています...');
-      const cache = await rpc('rebuildAnalyticsCache');
+      const cache = await rpc('rebuildAnalyticsCacheAfterBacklogSync');
       if (!cache || cache.ok === false) throw new Error(cache && cache.message ? cache.message : '実績の再集計を開始できませんでした。');
       toast(cache.continued ? '同期完了。実績の再集計を継続します' : '同期・実績再集計が完了しました');
     }

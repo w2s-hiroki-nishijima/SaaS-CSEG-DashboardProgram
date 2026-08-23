@@ -41,6 +41,7 @@ function startBacklogSync_(mode) {
       throw new Error('Backlog設定（スペースURL・APIキー・プロジェクトキー）が不足しています。');
     }
     const props = PropertiesService.getScriptProperties();
+    const performanceTargetIssueTypes = getAnalyticsTargetIssueTypes_(getSheet_('BacklogIssues').getParent());
     let state = parseJson_(props.getProperty('BACKLOG_SYNC_STATE'), null);
     if (!state || mode !== 'continuation') {
       const previous = props.getProperty('BACKLOG_LAST_SYNC_AT') || '';
@@ -79,6 +80,9 @@ function startBacklogSync_(mode) {
         );
       });
       const result = upsertRows_('BacklogIssues', normalized, ['issueKey'], true);
+      if (state.syncMode === 'incremental' && normalized.length) {
+        updatePerformanceIssuesIncremental_(normalized, performanceTargetIssueTypes);
+      }
       fetched += normalized.length;
       inserted += result.inserted;
       updated += result.updated;
@@ -106,7 +110,10 @@ function startBacklogSync_(mode) {
     props.setProperty('BACKLOG_LAST_SYNC_AT', state.upperBound);
     props.setProperty('BACKLOG_LAST_SYNC_STATUS', 'success');
     clearSheetCache_('BacklogIssues');
-    scheduleAnalyticsRebuild_();
+    if (state.syncMode === 'incremental') {
+      finalizePerformanceIssueIndex_(nowIso_());
+    }
+    scheduleAnalyticsRebuild_(state.syncMode === 'full');
     logSync_(state, nowIso_(), 'success', '同期完了');
     return { ok: true, continued: false, cachePending: true, fetchedCount: fetched, insertedCount: inserted, updatedCount: updated, lastSyncAt: state.upperBound };
   } catch (err) {
