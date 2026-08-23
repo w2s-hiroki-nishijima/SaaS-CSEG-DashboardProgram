@@ -137,7 +137,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 5, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 6, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -389,17 +389,14 @@ function addCompletedIssueToBucket_(
     owners.push('未設定');
   }
 
-  // 複数名・複数チームを担当者×チームに展開して各組み合わせへ計上する
+  // 個人実績は複数チーム案件でも、1チケットを1人につき1回だけ計上する。
+  // チーム別の複数計上は bucket.teams 側だけで行う。
   owners.forEach(function (owner) {
-    teams.forEach(function(team) {
-      const memberKey = owner + '\u001f' + team;
-      const memberMetric = ensureIssueMetric_(bucket.members, memberKey);
-      memberMetric.name = owner;
-      memberMetric.team = team;
-
-      addCompletedMetric_(memberMetric, issue, point, quality, hasQuality);
-      if (toBoolean_(issue.emergencyFlag)) memberMetric.emergencyCount++;
-    });
+    const memberMetric = ensureIssueMetric_(bucket.members, owner);
+    memberMetric.name = owner;
+    memberMetric.team = teams[0];
+    addCompletedMetric_(memberMetric, issue, point, quality, hasQuality);
+    if (toBoolean_(issue.emergencyFlag)) memberMetric.emergencyCount++;
   });
 }
 

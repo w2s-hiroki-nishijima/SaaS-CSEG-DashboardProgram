@@ -89,7 +89,39 @@ function getPerformanceMemberIssues(month, memberName) {
     return true;
   });
   rows.sort(function(a, b) { return String(a.issueKey).localeCompare(String(b.issueKey)); });
+  if (!rows.length) {
+    Array.prototype.push.apply(rows, readPerformanceIssuesFromBacklog_(targetMonth, name));
+  }
   return { month: targetMonth, memberName: name, rows: rows };
+}
+
+function readPerformanceIssuesFromBacklog_(month, memberName) {
+  const sheet = getSheet_('BacklogIssues');
+  const headers = CSEG_SHEETS.BacklogIssues;
+  const indexes = {};
+  headers.forEach(function(header, index) { indexes[header] = index; });
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const rowCount = lastRow - 1;
+  const owners = sheet.getRange(2, indexes.csegOwner + 1, rowCount, 1).getDisplayValues();
+  const dueDates = sheet.getRange(2, indexes.dueDate + 1, rowCount, 1).getDisplayValues();
+  const result = [];
+  const seen = {};
+  owners.forEach(function(row, index) {
+    if (String(dueDates[index][0] || '').slice(0, 7) !== month) return;
+    if (splitCsegOwners_(row[0]).indexOf(memberName) < 0) return;
+    const values = sheet.getRange(index + 2, 1, 1, headers.length).getValues()[0];
+    const issue = analyticsIssueFromRow_(values, indexes);
+    if (seen[issue.issueKey]) return;
+    seen[issue.issueKey] = true;
+    result.push({
+      month: month, memberName: memberName, issueKey: issue.issueKey,
+      summary: issue.summary, milestone: issue.milestone, point: issue.point,
+      tatBusinessDays: issue.tatBusinessDays, url: issue.url
+    });
+  });
+  result.sort(function(a, b) { return String(a.issueKey).localeCompare(String(b.issueKey)); });
+  return result;
 }
 
 function getSkillView() {
