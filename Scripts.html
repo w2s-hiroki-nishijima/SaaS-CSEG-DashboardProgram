@@ -7,7 +7,8 @@ const state = {
   initialRoute: window.__INITIAL_ROUTE__ || null,
   restoringHistory: false,
   entering: false,
-  feedbackFilter: 'open'
+  feedbackFilter: 'open',
+  lastServerView: null
 };
 
 const $ = s => document.querySelector(s);
@@ -89,6 +90,7 @@ function updateRoute(historyMode = 'push') {
 
 async function enterDashboard() {
   if (state.entering) return;
+  let result = null;
   state.entering = true;
   busy(true, 'アプリを起動しています...');
   try {
@@ -102,8 +104,15 @@ async function enterDashboard() {
     $('#landing').classList.add('hidden');
     $('#app').classList.remove('hidden');
     preparePageChrome(state.page);
+    state.lastServerView = {
+      page: state.page,
+      month: initial.month,
+      data: initial.data,
+      loadedAt: Date.now()
+    };
     renderInitialPage(state.page, initial.data);
     updateRoute('replace');
+    result = initial;
   } catch (e) {
     toast(e.message, true);
     showLanding();
@@ -111,6 +120,7 @@ async function enterDashboard() {
     state.entering = false;
     busy(false);
   }
+  return result;
 }
 
 function showLanding() {
@@ -142,14 +152,16 @@ async function openPage(page, historyMode = 'push') {
   updateRoute(historyMode);
   preparePageChrome(page);
   busy(true, 'データを読み込んでいます...');
+  let data = null;
   try {
-    await renderPage(page);
+    data = await renderPage(page);
   } catch (e) {
     $('#content').innerHTML = `<div class="panel"><div class="empty">${esc(e.message)}</div></div>`;
     toast(e.message, true);
   } finally {
     busy(false);
   }
+  return data;
 }
 
 function preparePageChrome(page) {
@@ -168,13 +180,21 @@ function renderInitialPage(page, data) {
 }
 
 function reloadCurrentPage(pushHistory = false) {
-  openPage(state.page, pushHistory ? 'push' : 'none');
+  return openPage(state.page, pushHistory ? 'push' : 'none');
 }
 
 async function renderPage(page) {
   const month = $('#globalMonth').value;
   const definition = CLIENT_PAGES[page] || CLIENT_PAGES.dashboard;
-  return definition.render(await definition.load(month));
+  const data = await definition.load(month);
+  state.lastServerView = {
+    page: page,
+    month: month,
+    data: data,
+    loadedAt: Date.now()
+  };
+  renderInitialPage(page, data);
+  return data;
 }
 
 function kpi(label, value, sub, cls = '') {

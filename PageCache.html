@@ -1,8 +1,9 @@
 <script>
 (function installPageCache() {
-  const CACHE_TTL_MILLIS = 60 * 1000;
+  const CACHE_TTL_MILLIS = 5 * 60 * 1000;
   const cache = {};
   const prefetchRequests = {};
+  let lastCapturedView = null;
 
   const originalEnterDashboard = window.enterDashboard;
   const originalOpenPage = window.openPage;
@@ -32,6 +33,14 @@
     delete cache[cacheKey(page, month)];
   }
 
+  function captureLastServerView() {
+    const view = state.lastServerView;
+    if (!view || view === lastCapturedView) return false;
+    saveCache(view.page, view.month, view.data);
+    lastCapturedView = view;
+    return true;
+  }
+
   function prefetchPages(month) {
     if (prefetchRequests[month]) {
       return prefetchRequests[month];
@@ -57,13 +66,16 @@
   }
 
   window.enterDashboard = async function enterDashboardWithPrefetch() {
-    await originalEnterDashboard();
+    const result = await originalEnterDashboard();
 
-    if (state.boot && state.boot.currentMonth) {
+    if (state.boot) {
+      captureLastServerView();
+      const month = document.querySelector('#globalMonth').value || state.boot.currentMonth;
       window.setTimeout(function startPrefetch() {
-        prefetchPages(state.boot.currentMonth);
+        prefetchPages(month);
       }, 0);
     }
+    return result;
   };
 
   window.openPage = async function openPageWithCache(page, historyMode = 'push') {
@@ -75,17 +87,24 @@
     const cached = readCache(page, month);
 
     if (!cached) {
-      return originalOpenPage(page, historyMode);
+      const result = await originalOpenPage(page, historyMode);
+      captureLastServerView();
+      window.setTimeout(function warmSelectedMonth() {
+        prefetchPages(month);
+      }, 0);
+      return result;
     }
 
+    const stale = Date.now() - cached.savedAt > CACHE_TTL_MILLIS;
     state.page = page;
     updateRoute(historyMode);
     preparePageChrome(page);
     renderInitialPage(page, cached.data);
 
-    if (Date.now() - cached.savedAt > CACHE_TTL_MILLIS) {
+    if (stale) {
       prefetchPages(month);
     }
+    return cached.data;
   };
 
   window.reloadCurrentPage = function reloadPageWithoutCache(pushHistory = false) {
@@ -94,5 +113,19 @@
 
     return originalReloadCurrentPage(pushHistory);
   };
+
+  // Direct URL startup can begin before this wrapper is installed. Poll only
+  // until the initial server response is available, then warm the selected month.
+  let warmupAttempts = 0;
+  function warmInitialView() {
+    if (state.boot && document.querySelector('#globalMonth').value) {
+      captureLastServerView();
+      prefetchPages(document.querySelector('#globalMonth').value);
+      return;
+    }
+    warmupAttempts++;
+    if (warmupAttempts < 200) window.setTimeout(warmInitialView, 50);
+  }
+  window.setTimeout(warmInitialView, 0);
 })();
 </script>
