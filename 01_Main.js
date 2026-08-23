@@ -74,6 +74,24 @@ function getPerformanceView(month) {
   return buildPerformanceData_(monthKey_(month));
 }
 
+function getPerformanceMemberIssues(month, memberName) {
+  assertDomainUser_();
+  const targetMonth = monthKey_(month);
+  const name = String(memberName || '').trim();
+  if (!name) throw new Error('メンバー名が指定されていません。');
+  const seen = {};
+  const rows = readRows_('PerformanceIssues').filter(function(row) {
+    return String(row.month) === targetMonth && String(row.memberName) === name;
+  }).filter(function(row) {
+    const key = String(row.issueKey || '');
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+  rows.sort(function(a, b) { return String(a.issueKey).localeCompare(String(b.issueKey)); });
+  return { month: targetMonth, memberName: name, rows: rows };
+}
+
 function getSkillView() {
   const user = assertDomainUser_();
   return buildSkillData_(user);

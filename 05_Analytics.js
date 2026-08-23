@@ -60,7 +60,13 @@ function buildPerformanceData_(month) {
   Object.keys(snapshot.members || {}).forEach(function(key) {
     const source = snapshot.members[key];
     const name = source.name || key.split('\u001f')[0];
-    const metric = ensureMember(name, source.team);
+    // 実績画面の所属・絞り込みは、チケット登録時のチームではなく
+    // 選択月の目標件数シートに設定された所属チームを正とする。
+    const rosterMember = memberByName[name];
+    const displayTeam = rosterMember && rosterMember.team
+      ? rosterMember.team
+      : source.team;
+    const metric = ensureMember(name, displayTeam);
     metric.completedCount += toNumber_(source.completedCount);
     metric.points += toNumber_(source.points);
     metric.emergencyCount += toNumber_(source.emergencyCount);
@@ -85,7 +91,8 @@ function buildPerformanceData_(month) {
     month: month,
     rows: rows,
     memberCount: unique_(rows.map(function(r) { return r.name; }).filter(Boolean)).length,
-    teams: unique_(rows.map(function(r) { return r.team; }).filter(Boolean))
+    teams: unique_(members.map(function(m) { return m.team; }).filter(Boolean))
+      .sort(function(a, b) { return a.localeCompare(b, 'ja'); })
   };
 }
 

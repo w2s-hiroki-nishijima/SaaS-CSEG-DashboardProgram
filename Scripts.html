@@ -279,8 +279,9 @@ function renderPerformance(d) {
           `</thead>` +
           `<tbody>` +
             `${d.rows.map(r => (
-              `<tr data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
+              `<tr data-team="${esc(r.team)}" data-name="${esc(r.name)}" class="performance-member-row">` +
                 `<td>` +
+                  `<button class="secondary" style="padding:4px 8px;margin-right:8px" onclick="togglePerformanceDetails(this, event)" aria-label="チケット明細を表示">▸</button>` +
                   `<strong>${esc(r.name)}</strong>` +
                 `</td>` +
                 `<td>${esc(r.team || '-')}</td>` +
@@ -296,6 +297,9 @@ function renderPerformance(d) {
                 `<td>${num(r.tat2)}</td>` +
                 `<td>${num(r.tat5)}</td>` +
                 `<td>${num(r.tat6)}</td>` +
+              `</tr>` +
+              `<tr class="performance-detail-row hidden" data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
+                `<td colspan="10"><div class="performance-detail-content"></div></td>` +
               `</tr>`
             )).join('')}` +
           `</tbody>` +
@@ -308,7 +312,47 @@ function renderPerformance(d) {
 function filterPerformance() {
   const team = $('#teamFilter').value,
     q = $('#memberSearch').value.toLowerCase();
-  $$('#performanceTable tbody tr').forEach(tr => tr.classList.toggle('hidden', (team && tr.dataset.team !== team) || (q && !tr.dataset.name.toLowerCase().includes(q))));
+  $$('#performanceTable tbody .performance-member-row').forEach(tr => {
+    const hidden = (team && tr.dataset.team !== team) || (q && !tr.dataset.name.toLowerCase().includes(q));
+    tr.classList.toggle('hidden', hidden);
+    const detailRow = tr.nextElementSibling;
+    detailRow.classList.toggle('hidden', hidden || detailRow.dataset.open !== 'true');
+  });
+}
+
+async function togglePerformanceDetails(button, event) {
+  event.stopPropagation();
+  const memberRow = button.closest('tr');
+  const detailRow = memberRow.nextElementSibling;
+  const content = detailRow.querySelector('.performance-detail-content');
+  const opening = detailRow.dataset.open !== 'true';
+  detailRow.dataset.open = opening ? 'true' : 'false';
+  detailRow.classList.toggle('hidden', !opening);
+  button.textContent = opening ? '▾' : '▸';
+  if (!opening || detailRow.dataset.loaded === 'true') return;
+  content.innerHTML = '<div class="empty">チケットを読み込んでいます...</div>';
+  try {
+    const data = await rpc('getPerformanceMemberIssues', $('#globalMonth').value, memberRow.dataset.name);
+    detailRow.dataset.loaded = 'true';
+    content.innerHTML = data.rows.length ? (
+      `<div class="table-wrap"><table class="table">` +
+        `<thead><tr><th>件名</th><th>マイルストーン</th><th>評価ポイント</th><th>対応日数（TAT）</th></tr></thead>` +
+        `<tbody>` +
+        data.rows.map(issue => (
+          `<tr>` +
+            `<td><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.summary || issue.issueKey)}</a></td>` +
+            `<td>${esc(issue.milestone || '-')}</td>` +
+            `<td>${num(issue.point, 2)}</td>` +
+            `<td>${issue.tatBusinessDays === '' ? '-' : num(issue.tatBusinessDays, 0)}</td>` +
+          `</tr>`
+        )).join('') +
+        `</tbody>` +
+      `</table></div>`
+    ) : '<div class="empty">対象チケットはありません</div>';
+  } catch (e) {
+    content.innerHTML = `<div class="empty">${esc(e.message)}</div>`;
+    toast(e.message, true);
+  }
 }
 
 function renderSkills(d) {

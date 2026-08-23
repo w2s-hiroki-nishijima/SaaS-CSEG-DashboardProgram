@@ -36,7 +36,7 @@ const CSEG_APP = Object.freeze({
     '小': 0.5,
     '中': 1,
     '大': 1.5,
-    '特大': 2.5,
+    '特大': 2,
     '最大': 2.5
   },
   EMERGENCY_BONUS: 0.5,
@@ -185,7 +185,8 @@ const CSEG_SHEETS = Object.freeze({
   Holidays: ['date', 'name'],
   Settings: ['key', 'value', 'description', 'updatedAt', 'updatedBy'],
   SyncLog: ['syncId', 'startedAt', 'finishedAt', 'mode', 'status', 'fetchedCount', 'insertedCount', 'updatedCount', 'message'],
-  AnalyticsCache: ['cacheKey', 'payloadJson', 'sourceUpdatedAt', 'updatedAt']
+  AnalyticsCache: ['cacheKey', 'payloadJson', 'sourceUpdatedAt', 'updatedAt'],
+  PerformanceIssues: ['month', 'memberName', 'sourceTeam', 'issueKey', 'summary', 'milestone', 'point', 'tatBusinessDays', 'url']
 });
 
 const CSEG_SHEET_HEADERS = Object.freeze({

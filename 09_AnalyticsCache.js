@@ -79,6 +79,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     while (state.nextRow <= state.lastRow && Date.now() - startedMs < CSEG_ANALYTICS_REBUILD.MAX_MILLIS) {
       const rowCount = Math.min(CSEG_ANALYTICS_REBUILD.CHUNK_ROWS, state.lastRow - state.nextRow + 1);
       const values = issueSheet.getRange(state.nextRow, 1, rowCount, headers.length).getValues();
+      const performanceIssueRows = [];
       values.forEach(function (row) {
         if (!row.some(function (value) {
           return value !== '';
@@ -94,14 +95,13 @@ function runAnalyticsCacheRebuild_(restart, mode) {
           return;
         }
 
-        applyIssueToAnalyticsWork_(
-          work,
-          analyticsIssueFromRow_(row, indexes),
-          today
-        );
+        const issue = analyticsIssueFromRow_(row, indexes);
+        applyIssueToAnalyticsWork_(work, issue, today);
+        Array.prototype.push.apply(performanceIssueRows, buildPerformanceIssueRows_(issue));
 
         state.issueCount++;
       });
+      appendRows_('PerformanceIssues', performanceIssueRows);
       state.nextRow += rowCount;
       state.processedRows += rowCount;
     }
@@ -137,7 +137,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 4, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 5, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -163,6 +163,7 @@ function initializeAnalyticsRebuild_(mode) {
     return String(row.cacheKey || '').indexOf('work:') !== 0;
   });
   replaceAllRows_('AnalyticsCache', existing);
+  replaceAllRows_('PerformanceIssues', []);
   const state = {
     mode: mode,
     nextRow: 2,
@@ -272,6 +273,26 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
     work.overdue.tickets =
       work.overdue.tickets.slice(0, 20);
   }
+}
+
+function buildPerformanceIssueRows_(issue) {
+  const dueDate = String(issue.dueDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return [];
+  const teams = splitCsegTeams_(issue.team);
+  const owners = splitCsegOwners_(issue.csegOwner);
+  if (!teams.length) teams.push('未設定');
+  if (!owners.length) owners.push('未設定');
+  const rows = [];
+  owners.forEach(function(owner) {
+    teams.forEach(function(team) {
+      rows.push({
+        month: dueDate.slice(0, 7), memberName: owner, sourceTeam: team,
+        issueKey: issue.issueKey, summary: issue.summary, milestone: issue.milestone,
+        point: issue.point, tatBusinessDays: issue.tatBusinessDays, url: issue.url
+      });
+    });
+  });
+  return rows;
 }
 
 function loadAnalyticsWork_() {
