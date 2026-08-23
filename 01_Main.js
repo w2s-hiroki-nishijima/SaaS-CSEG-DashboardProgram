@@ -3,9 +3,18 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
+function doGet(e) {
+  const params = e && e.parameter ? e.parameter : {};
+  const page = /^[a-z]+$/.test(String(params.page || '')) ? String(params.page) : 'dashboard';
+  const month = /^\d{4}-\d{2}$/.test(String(params.month || '')) ? String(params.month) : '';
+  const template = HtmlService.createTemplateFromFile('Index');
+  template.initialRouteJson = JSON.stringify({
+    page: page,
+    month: month,
+    explicit: Boolean(params.page || params.month)
+  }).replace(/</g, '\\u003c');
+  template.initialRouteDirect = Boolean(params.page || params.month);
+  return template.evaluate()
     .setTitle(CSEG_APP.NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -15,13 +24,34 @@ function getBootstrapData() {
   return buildBootstrapData_(user);
 }
 
-function getInitialView() {
+function getInitialView(page, month) {
   const user = assertDomainUser_();
   const boot = buildBootstrapData_(user);
+  const allowedPages = boot.pages.filter(function(item) {
+    return !item.admin || user.isAdmin;
+  }).map(function(item) { return item.id; });
+  const targetPage = allowedPages.indexOf(String(page || 'dashboard')) >= 0
+    ? String(page || 'dashboard')
+    : 'dashboard';
+  const targetMonth = monthKey_(month || boot.currentMonth);
   return {
     boot: boot,
-    dashboard: buildDashboardData_(boot.currentMonth)
+    page: targetPage,
+    month: targetMonth,
+    data: buildInitialPageData_(targetPage, targetMonth, user)
   };
+}
+
+function buildInitialPageData_(page, month, user) {
+  if (page === 'dashboard') return buildDashboardData_(month);
+  if (page === 'performance') return buildPerformanceData_(month);
+  if (page === 'skills') return buildSkillData_(user);
+  if (page === 'assignments') return buildAssignmentData_(month, user);
+  if (page === 'targets') return buildTargetData_(month);
+  if (page === 'aggregate') return buildAggregateData_(month);
+  if (page === 'notifications') return { rules: readRows_('NotificationRules') };
+  if (page === 'settings') return buildSettingsView_(month);
+  return buildDashboardData_(month);
 }
 
 function buildBootstrapData_(user) {

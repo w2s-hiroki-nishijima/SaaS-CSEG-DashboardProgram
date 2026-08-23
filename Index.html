@@ -5,9 +5,9 @@
   <meta charset="utf-8">
   <?!= include('Styles'); ?>
 </head>
-<body>
+<body class="<?!= initialRouteDirect ? 'direct-route' : '' ?>">
   <div id="toast" class="toast" aria-live="polite"></div>
-  <div id="loader" class="loader hidden"><div class="spinner"></div><span id="loaderText">読み込み中...</span></div>
+  <div id="loader" class="loader <?!= initialRouteDirect ? '' : 'hidden' ?>"><div class="spinner"></div><span id="loaderText">読み込み中...</span></div>
 
   <section id="landing" class="landing">
     <div class="landing-glow glow-a"></div><div class="landing-glow glow-b"></div>
@@ -35,6 +35,7 @@
       <div id="content" class="content"></div>
     </main>
   </div>
+  <script>window.__INITIAL_ROUTE__ = <?!= initialRouteJson ?>;</script>
   <?!= include('Scripts'); ?>
   <?!= include('PageCache'); ?>
 </body>

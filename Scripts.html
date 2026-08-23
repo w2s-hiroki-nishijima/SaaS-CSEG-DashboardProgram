@@ -4,7 +4,7 @@ const state = {
   page: 'dashboard',
   cache: {},
   skillMemberId: '',
-  initialRoute: null,
+  initialRoute: window.__INITIAL_ROUTE__ || null,
   restoringHistory: false,
   entering: false
 };
@@ -77,29 +77,21 @@ async function enterDashboard() {
   state.entering = true;
   busy(true, 'アプリを起動しています...');
   try {
-    const results = await Promise.all([rpc('getInitialView'), getInitialRoute()]);
-    const initial = results[0];
-    const route = results[1];
+    const route = await getInitialRoute();
+    const initial = await rpc('getInitialView', route.page, route.month);
     state.boot = initial.boot;
     buildNav();
-    const allowedPages = state.boot.pages.filter(p => !p.admin || state.boot.user.isAdmin).map(p => p.id);
-    state.page = allowedPages.includes(route.page) ? route.page : 'dashboard';
-    $('#globalMonth').value = route.month || state.boot.currentMonth;
+    state.page = initial.page;
+    $('#globalMonth').value = initial.month;
     renderUser();
     $('#landing').classList.add('hidden');
     $('#app').classList.remove('hidden');
-    if (state.page === 'dashboard' && $('#globalMonth').value === state.boot.currentMonth) {
-      $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === 'dashboard'));
-      $('#pageTitle').textContent = 'ダッシュボード';
-      $('#pageEyebrow').textContent = 'OVERVIEW';
-      $('#globalMonth').closest('label').classList.remove('hidden');
-      renderDashboard(initial.dashboard);
-      updateRoute('replace');
-    } else {
-      await openPage(state.page, 'replace');
-    }
+    preparePageChrome(state.page);
+    renderInitialPage(state.page, initial.data);
+    updateRoute('replace');
   } catch (e) {
     toast(e.message, true);
+    showLanding();
   } finally {
     state.entering = false;
     busy(false);
@@ -107,6 +99,7 @@ async function enterDashboard() {
 }
 
 function showLanding() {
+  document.body.classList.remove('direct-route');
   $('#app').classList.add('hidden');
   $('#landing').classList.remove('hidden');
 }
@@ -132,11 +125,7 @@ async function openPage(page, historyMode = 'push') {
   if (!allowed) page = 'dashboard';
   state.page = page;
   updateRoute(historyMode);
-  $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
-  const meta = state.boot.pages.find(p => p.id === page);
-  $('#pageTitle').textContent = meta ? meta.label : '';
-  $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
-  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications'].includes(page));
+  preparePageChrome(page);
   busy(true, 'データを読み込んでいます...');
   try {
     await renderPage(page);
@@ -146,6 +135,25 @@ async function openPage(page, historyMode = 'push') {
   } finally {
     busy(false);
   }
+}
+
+function preparePageChrome(page) {
+  $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
+  const meta = state.boot.pages.find(p => p.id === page);
+  $('#pageTitle').textContent = meta ? meta.label : '';
+  $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
+  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications'].includes(page));
+}
+
+function renderInitialPage(page, data) {
+  if (page === 'dashboard') return renderDashboard(data);
+  if (page === 'performance') return renderPerformance(data);
+  if (page === 'skills') return renderSkills(data);
+  if (page === 'assignments') return renderAssignments(data);
+  if (page === 'targets') return renderTargets(data);
+  if (page === 'aggregate') return renderAggregate(data);
+  if (page === 'notifications') return renderNotifications(data);
+  if (page === 'settings') return renderSettings(data);
 }
 
 function reloadCurrentPage(pushHistory = false) {
