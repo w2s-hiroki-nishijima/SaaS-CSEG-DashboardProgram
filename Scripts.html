@@ -35,6 +35,20 @@ const num = (v, d = 0) => Number(v || 0).toLocaleString('ja-JP', { minimumFracti
 
 const pct = v => num(Number(v || 0) * 100, 0) + '%';
 
+// Client-side page registry. Add a page here and to buildBootstrapData_ instead
+// of extending several independent if/else chains.
+const CLIENT_PAGES = Object.freeze({
+  dashboard: { load: month => rpc('getDashboardView', month), render: renderDashboard },
+  performance: { load: month => rpc('getPerformanceView', month), render: renderPerformance },
+  skills: { load: () => rpc('getSkillView'), render: renderSkills, monthIndependent: true },
+  assignments: { load: month => rpc('getAssignmentView', month), render: renderAssignments },
+  targets: { load: month => rpc('getTargetView', month), render: renderTargets },
+  aggregate: { load: month => rpc('getAggregateView', month), render: renderAggregate },
+  notifications: { load: () => rpc('getNotificationView'), render: renderNotifications, monthIndependent: true },
+  settings: { load: month => rpc('getSettingsView', month), render: renderSettings },
+  feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
+});
+
 function busy(on, text = '処理中...') {
   $('#loaderText').textContent = text;
   $('#loader').classList.toggle('hidden', !on);
@@ -144,19 +158,13 @@ function preparePageChrome(page) {
   const meta = state.boot.pages.find(p => p.id === page);
   $('#pageTitle').textContent = meta ? meta.label : '';
   $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
-  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications', 'feedback'].includes(page));
+  const definition = CLIENT_PAGES[page];
+  $('#globalMonth').closest('label').classList.toggle('hidden', Boolean(definition && definition.monthIndependent));
 }
 
 function renderInitialPage(page, data) {
-  if (page === 'dashboard') return renderDashboard(data);
-  if (page === 'performance') return renderPerformance(data);
-  if (page === 'skills') return renderSkills(data);
-  if (page === 'assignments') return renderAssignments(data);
-  if (page === 'targets') return renderTargets(data);
-  if (page === 'aggregate') return renderAggregate(data);
-  if (page === 'notifications') return renderNotifications(data);
-  if (page === 'settings') return renderSettings(data);
-  if (page === 'feedback') return renderFeedback(data);
+  const definition = CLIENT_PAGES[page] || CLIENT_PAGES.dashboard;
+  return definition.render(data);
 }
 
 function reloadCurrentPage(pushHistory = false) {
@@ -165,24 +173,8 @@ function reloadCurrentPage(pushHistory = false) {
 
 async function renderPage(page) {
   const month = $('#globalMonth').value;
-  if (page === 'dashboard')
-    return renderDashboard(await rpc('getDashboardView', month));
-  if (page === 'performance')
-    return renderPerformance(await rpc('getPerformanceView', month));
-  if (page === 'skills')
-    return renderSkills(await rpc('getSkillView'));
-  if (page === 'assignments')
-    return renderAssignments(await rpc('getAssignmentView', month));
-  if (page === 'targets')
-    return renderTargets(await rpc('getTargetView', month));
-  if (page === 'aggregate')
-    return renderAggregate(await rpc('getAggregateView', month));
-  if (page === 'notifications')
-    return renderNotifications(await rpc('getNotificationView'));
-  if (page === 'settings')
-    return renderSettings(await rpc('getSettingsView', month));
-  if (page === 'feedback')
-    return renderFeedback(await rpc('getFeedbackView'));
+  const definition = CLIENT_PAGES[page] || CLIENT_PAGES.dashboard;
+  return definition.render(await definition.load(month));
 }
 
 function kpi(label, value, sub, cls = '') {

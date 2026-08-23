@@ -2,20 +2,15 @@
 (function installPageCache() {
   const CACHE_TTL_MILLIS = 60 * 1000;
   const cache = {};
-  let prefetchRequest = null;
+  const prefetchRequests = {};
 
   const originalEnterDashboard = window.enterDashboard;
   const originalOpenPage = window.openPage;
   const originalReloadCurrentPage = window.reloadCurrentPage;
 
   function cacheKey(page, month) {
-    const monthIndependentPages = [
-      'skills',
-      'notifications',
-      'settings'
-    ];
-
-    const period = monthIndependentPages.includes(page)
+    const definition = CLIENT_PAGES[page];
+    const period = definition && definition.monthIndependent
       ? 'global'
       : month;
 
@@ -37,32 +32,12 @@
     delete cache[cacheKey(page, month)];
   }
 
-  function renderCachedPage(page, data) {
-    if (page === 'dashboard') {
-      renderDashboard(data);
-    } else if (page === 'performance') {
-      renderPerformance(data);
-    } else if (page === 'skills') {
-      renderSkills(data);
-    } else if (page === 'assignments') {
-      renderAssignments(data);
-    } else if (page === 'targets') {
-      renderTargets(data);
-    } else if (page === 'aggregate') {
-      renderAggregate(data);
-    } else if (page === 'notifications') {
-      renderNotifications(data);
-    } else if (page === 'settings') {
-      renderSettings(data);
-    }
-  }
-
   function prefetchPages(month) {
-    if (prefetchRequest) {
-      return prefetchRequest;
+    if (prefetchRequests[month]) {
+      return prefetchRequests[month];
     }
 
-    prefetchRequest = rpc('getNavigationPrefetchData', month)
+    prefetchRequests[month] = rpc('getNavigationPrefetchData', month)
       .then(function handlePrefetchSuccess(result) {
         const pages = result.pages || {};
 
@@ -70,15 +45,15 @@
           saveCache(page, result.month, pages[page]);
         });
 
-        prefetchRequest = null;
+        delete prefetchRequests[month];
         return result;
       })
       .catch(function handlePrefetchFailure() {
-        prefetchRequest = null;
+        delete prefetchRequests[month];
         return null;
       });
 
-    return prefetchRequest;
+    return prefetchRequests[month];
   }
 
   window.enterDashboard = async function enterDashboardWithPrefetch() {
@@ -91,49 +66,33 @@
     }
   };
 
-  window.openPage = async function openPageWithCache(page) {
+  window.openPage = async function openPageWithCache(page, historyMode = 'push') {
+    const allowed = state.boot.pages.some(function(item) {
+      return item.id === page && (!item.admin || state.boot.user.isAdmin);
+    });
+    if (!allowed) page = 'dashboard';
     const month = document.querySelector('#globalMonth').value;
     const cached = readCache(page, month);
 
     if (!cached) {
-      return originalOpenPage(page);
+      return originalOpenPage(page, historyMode);
     }
 
     state.page = page;
-
-    document.querySelectorAll('.nav-item').forEach(function updateNav(item) {
-      item.classList.toggle('active', item.dataset.page === page);
-    });
-
-    const pageMeta = state.boot.pages.find(function findPage(item) {
-      return item.id === page;
-    });
-
-    document.querySelector('#pageTitle').textContent = pageMeta
-      ? pageMeta.label
-      : '';
-    document.querySelector('#pageEyebrow').textContent = page === 'dashboard'
-      ? 'OVERVIEW'
-      : page.toUpperCase();
-    document.querySelector('#globalMonth')
-      .closest('label')
-      .classList.toggle(
-        'hidden',
-        ['skills', 'notifications', 'settings'].includes(page)
-      );
-
-    renderCachedPage(page, cached.data);
+    updateRoute(historyMode);
+    preparePageChrome(page);
+    renderInitialPage(page, cached.data);
 
     if (Date.now() - cached.savedAt > CACHE_TTL_MILLIS) {
       prefetchPages(month);
     }
   };
 
-  window.reloadCurrentPage = function reloadPageWithoutCache() {
+  window.reloadCurrentPage = function reloadPageWithoutCache(pushHistory = false) {
     const month = document.querySelector('#globalMonth').value;
     deleteCache(state.page, month);
 
-    return originalReloadCurrentPage();
+    return originalReloadCurrentPage(pushHistory);
   };
 })();
 </script>

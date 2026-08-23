@@ -43,16 +43,7 @@ function getInitialView(page, month) {
 }
 
 function buildInitialPageData_(page, month, user) {
-  if (page === 'dashboard') return buildDashboardData_(month);
-  if (page === 'performance') return buildPerformanceData_(month);
-  if (page === 'skills') return buildSkillData_(user);
-  if (page === 'assignments') return buildAssignmentData_(month, user);
-  if (page === 'targets') return buildTargetData_(month);
-  if (page === 'aggregate') return buildAggregateData_(month);
-  if (page === 'notifications') return { rules: readRows_('NotificationRules') };
-  if (page === 'settings') return buildSettingsView_(month);
-  if (page === 'feedback') return buildFeedbackData_(user);
-  return buildDashboardData_(month);
+  return getApplicationServices_().pages.get(page, month, user);
 }
 
 function buildBootstrapData_(user) {
@@ -89,13 +80,13 @@ function getNavigationPrefetchData(month) {
   const targetMonth = monthKey_(month);
   const pages = {
     performance: buildPerformanceData_(targetMonth),
-    skills: buildSkillData_(user),
+    skills: getApplicationServices_().skill.getView(user),
     assignments: buildAssignmentData_(targetMonth, user)
   };
   if (user.isAdmin) {
     pages.targets = buildTargetData_(targetMonth);
     pages.aggregate = buildAggregateData_(targetMonth);
-    pages.notifications = { rules: readRows_('NotificationRules') };
+    pages.notifications = getApplicationServices_().notification.getView();
     pages.settings = buildSettingsView_(targetMonth);
   }
   return { month: targetMonth, pages: pages };
@@ -186,7 +177,7 @@ function readPerformanceIssuesFromBacklog_(month, memberName) {
 
 function getSkillView() {
   const user = assertDomainUser_();
-  return buildSkillData_(user);
+  return getApplicationServices_().skill.getView(user);
 }
 
 function getAssignmentView(month) {
@@ -211,7 +202,7 @@ function getAggregateView(month) {
 
 function getNotificationView() {
   assertAdmin_();
-  return { rules: readRows_('NotificationRules') };
+  return getApplicationServices_().notification.getView();
 }
 
 function getSettingsView(month) {

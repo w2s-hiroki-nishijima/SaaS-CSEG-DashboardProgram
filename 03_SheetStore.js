@@ -219,7 +219,7 @@ function saveMonthlyTargetRows_(month, rows) {
     const assignment = nonNegative_(input.assignmentHours);
     const minus = nonNegative_(input.minusHours);
     const adjustment = nonNegative_(input.adjustmentHours);
-    const target = round_(Math.max(0, current.speedCoefficient * (assignment - minus - adjustment) / CSEG_APP.TARGET_BASE_HOURS), 1);
+    const target = TargetSnapshotEntity.calculate(current.speedCoefficient, assignment, minus, adjustment);
     sheet.getRange(current.rowNumber, 5, 1, 4).setValues([[assignment, minus, adjustment, target]]);
   });
 }

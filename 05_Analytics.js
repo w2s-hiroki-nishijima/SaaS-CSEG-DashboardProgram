@@ -1,6 +1,6 @@
 /** Dashboard, performance, target and aggregate calculations. */
 function getMonthTargets_(month) {
-  return readMonthlyTargetRows_(month);
+  return getApplicationServices_().target.getTargets(month);
 }
 
 function buildDashboardData_(month) {
@@ -91,22 +91,7 @@ function buildPerformanceData_(month) {
 }
 
 function buildTargetData_(month) {
-  const current = readMonthlyTargetRows_(month);
-  return {
-    month: month,
-    baseHours: CSEG_APP.TARGET_BASE_HOURS,
-    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
-    assignmentSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.ASSIGNMENT_SPREADSHEET_ID + '/edit',
-    rows: current.map(function(row) {
-      return {
-        memberId: row.memberId, memberName: row.memberName, team: row.team,
-        skillLevel: row.skillLevel, experienceLevel: row.experienceLevel,
-        speedCoefficient: row.speedCoefficient, assignmentHours: row.assignmentHours,
-        minusHours: row.minusHours, adjustmentHours: row.adjustmentHours,
-        supportHours: 0, targetCount: round_(row.targetCount, 1)
-      };
-    })
-  };
+  return getApplicationServices_().target.getView(month);
 }
 
 function buildAggregateData_(month) {
@@ -133,25 +118,11 @@ function buildAggregateData_(month) {
 }
 
 function buildAssignmentData_(month, user) {
-  const rows = readMonthlyAssignmentRows_(month);
-  const members = rows.map(function(row) {
-    return { memberId: row.memberId, name: row.memberName, team: row.team };
-  });
-  return {
-    month: month, user: user, members: members, rows: rows,
-    spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.ASSIGNMENT_SPREADSHEET_ID + '/edit'
-  };
+  return getApplicationServices_().assignment.getView(month, user);
 }
 
 function buildSkillData_(user) {
-  const master = readRows_('SkillMaster').filter(function(r) { return toBoolean_(r.active); });
-  master.sort(function(a, b) { return toNumber_(a.displayOrder) - toNumber_(b.displayOrder); });
-  return {
-    user: user,
-    members: readRows_('Members').filter(function(r) { return toBoolean_(r.active); }),
-    skills: master,
-    scores: readRows_('SkillScores')
-  };
+  return getApplicationServices_().skill.getView(user);
 }
 
 function buildTermSummary_() {

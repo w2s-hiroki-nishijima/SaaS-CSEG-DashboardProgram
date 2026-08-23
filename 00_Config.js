@@ -1,7 +1,7 @@
 /** CSEG Dashboard configuration and storage schema. */
 const CSEG_APP = Object.freeze({
   NAME: 'CSEG Dashboard',
-  VERSION: '2.0.0',
+  VERSION: '3.0.0',
   TIMEZONE: 'Asia/Tokyo',
   ALLOWED_DOMAIN: 'w2solution.co.jp',
   DEFAULT_DATA_SPREADSHEET_ID: '1nWxKowOvJeOzz1HFzyhieTvcapMn3UXl5ZDTcWyYRiY',
@@ -14,24 +14,6 @@ const CSEG_APP = Object.freeze({
   SYNC_OVERLAP_MINUTES: 5,
   CACHE_SECONDS: 300,
   TARGET_BASE_HOURS: 5.5,
-  CUSTOM_FIELDS: {
-    caseType: ['【CS】案件タイプ', '案件タイプ'],
-    environment: ['環境'],
-    csegOwner: ['SaaS-CSEG主担当', 'CSEG主担当', 'CSEG担当者'],
-    team: ['担当チーム(SaaS)', '担当チーム（SaaS）', 'チーム', '担当チーム'],
-    issueSize: ['チケットサイズ', '規模', 'サイズ'],
-    csTicketContentRating: ['CS起票内容評価'],
-    ratingReasonCsegToCs: ['評価理由(CSEGからCS)', '評価理由（CSEGからCS）'],
-    qualityScore: ['【CS】評価（質）', '【CS】評価(質)', 'CSEG品質', '品質評価', 'CS評価'],
-    csQualityReasonCsToCseg: ['【CS】評価理由(CSからCSEG)', '【CS】評価理由（CSからCSEG）'],
-    waitingFlag: ['待ちフラグ', '待機フラグ', '待機'],
-    escalationCategory: ['エスカレ分類'],
-    dueDateRequiredFlag: ['【CS】期日マストフラグ'],
-    emergencyFlag: ['緊急募集フラグ', '緊急フラグ', '緊急対応'],
-    rollbackFlag: ['差し戻しフラグ', '差し戻し'],
-    completionStatus: ['完了区分', '完了ステータス'],
-    completedDate: ['【CS】完了日', '完了日', '対応完了日']
-  },
   POINTS_BY_SIZE: {
     '極小': 0.25,
     '小': 0.5,
@@ -130,6 +112,11 @@ const CSEG_APP = Object.freeze({
     '完了ステータス'
   ]
 },
+});
+
+const CSEG_NOTIFICATION = Object.freeze({
+  TYPES: ['overdue_tickets', 'missing_assignment', 'sync_error'],
+  CHANNELS: ['email', 'slack', 'none']
 });
 
 const CSEG_SHEETS = Object.freeze({

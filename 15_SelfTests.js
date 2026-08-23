@@ -1,0 +1,60 @@
+/**
+ * Lightweight tests that can run in the Apps Script editor without changing
+ * spreadsheets. Functions ending in an underscore are not exposed to the web UI.
+ */
+function runDomainSelfTests_() {
+  const results = [];
+  function test(name, body) {
+    try {
+      body();
+      results.push({ name: name, ok: true });
+    } catch (error) {
+      results.push({ name: name, ok: false, message: error.message });
+    }
+  }
+  function equal(actual, expected, message) {
+    if (actual !== expected) {
+      throw new Error((message || '値が一致しません。') + ' expected=' + expected + ' actual=' + actual);
+    }
+  }
+
+  const actor = { email: 'tester@w2solution.co.jp', name: 'テスト担当' };
+  const clock = function() { return '2026-08-23T12:00:00+09:00'; };
+  const idFactory = function() { return 'fixed-id'; };
+
+  test('改善要望の初期ステータスは未対応', function() {
+    const report = FeedbackReportEntity.create({
+      type: '不具合', title: '表示崩れ', description: '一覧が崩れる'
+    }, actor, clock, idFactory);
+    equal(report.status, '未対応');
+    equal(report.reportId, 'feedback_fixed-id');
+  });
+
+  test('アサイン実績は負数を拒否する', function() {
+    let rejected = false;
+    try {
+      AssignmentActualEntity.fromInput({ memberId: 'm1', month: '2026-08', responseHours: -1 });
+    } catch (error) {
+      rejected = error instanceof DomainValidationError;
+    }
+    equal(rejected, true);
+  });
+
+  test('目標件数を5.5時間基準で算出する', function() {
+    equal(TargetSnapshotEntity.calculate(1.1, 55, 5, 0), 10);
+  });
+
+  test('マイルストーンと緊急加点を合算する', function() {
+    equal(milestonePoint_('SaaS:中(5h)') + CSEG_APP.EMERGENCY_BONUS, 1.5);
+    equal(milestonePoint_('SaaS:最大(20h)'), 2.5);
+  });
+
+  test('BacklogのTRUEを緊急扱いにする', function() {
+    equal(toBoolean_(true), true);
+    equal(toBoolean_('TRUE'), true);
+    equal(toBoolean_('FALSE'), false);
+  });
+
+  const failed = results.filter(function(result) { return !result.ok; });
+  return { ok: failed.length === 0, passed: results.length - failed.length, failed: failed.length, results: results };
+}
