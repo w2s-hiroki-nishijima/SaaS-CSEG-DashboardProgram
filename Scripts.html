@@ -1036,7 +1036,15 @@ async function manualSync() {
   busy(true, 'Backlogを同期しています...');
   try {
     const r = await rpc('manualBacklogSync');
-    toast(r.continued ? '同期を継続実行します' : '同期完了。集計は約1〜2分後に反映されます');
+    if (!r || r.ok === false) throw new Error(r && r.message ? r.message : 'Backlog同期を開始できませんでした。');
+    if (r.continued) {
+      toast('Backlog同期を継続実行します');
+    } else {
+      busy(true, 'Backlog同期完了。実績を再集計しています...');
+      const cache = await rpc('rebuildAnalyticsCache');
+      if (!cache || cache.ok === false) throw new Error(cache && cache.message ? cache.message : '実績の再集計を開始できませんでした。');
+      toast(cache.continued ? '同期完了。実績の再集計を継続します' : '同期・実績再集計が完了しました');
+    }
     await reloadCurrentPage();
   } catch (e) {
     toast(e.message, true);

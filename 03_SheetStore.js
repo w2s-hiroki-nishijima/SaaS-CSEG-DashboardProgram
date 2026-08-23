@@ -65,7 +65,9 @@ function appendRows_(sheetName, rows) {
   const sheet = getSheet_(sheetName);
   const headers = CSEG_SHEETS[sheetName];
   const values = rows.map(function(row) { return headers.map(function(h) { return row[h] == null ? '' : row[h]; }); });
-  sheet.getRange(sheet.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+  const startRow = sheet.getLastRow() + 1;
+  ensureSheetRowCapacity_(sheet, startRow + values.length - 1);
+  sheet.getRange(startRow, 1, values.length, headers.length).setValues(values);
   clearSheetCache_(sheetName);
 }
 
@@ -96,7 +98,11 @@ function upsertRows_(sheetName, rows, keyFields, lockAlreadyHeld) {
         appends.push(row);
       }
     });
-    if (appends.length) sheet.getRange(sheet.getLastRow() + 1, 1, appends.length, headers.length).setValues(appends);
+    if (appends.length) {
+      const startRow = sheet.getLastRow() + 1;
+      ensureSheetRowCapacity_(sheet, startRow + appends.length - 1);
+      sheet.getRange(startRow, 1, appends.length, headers.length).setValues(appends);
+    }
     clearSheetCache_(sheetName);
     return { inserted: appends.length, updated: updated };
   } finally {
@@ -125,6 +131,13 @@ function formatDataSheet_(sheet, columnCount) {
     .setFontColor('#111827');
   sheet.getRange(1, 1, Math.max(sheet.getMaxRows(), 2), columnCount).createFilter();
   sheet.autoResizeColumns(1, Math.min(columnCount, 12));
+}
+
+function ensureSheetRowCapacity_(sheet, requiredLastRow) {
+  const maxRows = sheet.getMaxRows();
+  if (requiredLastRow > maxRows) {
+    sheet.insertRowsAfter(maxRows, requiredLastRow - maxRows);
+  }
 }
 
 function invalidateAllCaches_() {
