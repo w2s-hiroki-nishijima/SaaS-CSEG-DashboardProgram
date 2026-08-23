@@ -201,13 +201,13 @@ function normalizeBacklogIssue_(
 
   const closedAt = dateKey_(completed);
 
-  const size = String(
-    configuredCustomFieldValue_(issue, 'issueSize') || ''
-  );
-
   const emergency = toBoolean_(
     configuredCustomFieldValue_(issue, 'emergencyFlag')
   );
+
+  const milestone = (issue.milestone || [])
+    .map(function (item) { return item.name; })
+    .join(', ');
 
   const createdAt = dateKey_(issue.created);
 
@@ -232,11 +232,7 @@ function normalizeBacklogIssue_(
       ? issue.priority.name
       : '',
 
-    milestone: (issue.milestone || [])
-      .map(function (item) {
-        return item.name;
-      })
-      .join(', '),
+    milestone: milestone,
 
     startDate: dateKey_(issue.startDate),
 
@@ -355,17 +351,7 @@ function normalizeBacklogIssue_(
       ? businessDays_(createdAt, closedAt, holidaySet)
       : '',
 
-    point:
-      (
-        CSEG_APP.POINTS_BY_SIZE[size] == null
-          ? 1
-          : CSEG_APP.POINTS_BY_SIZE[size]
-      ) +
-      (
-        emergency
-          ? CSEG_APP.EMERGENCY_BONUS
-          : 0
-      ),
+    point: milestonePoint_(milestone) + (emergency ? CSEG_APP.EMERGENCY_BONUS : 0),
 
     url:
       cfg.backlogSpaceUrl +

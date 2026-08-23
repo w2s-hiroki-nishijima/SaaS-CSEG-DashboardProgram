@@ -137,7 +137,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 3, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 4, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -188,12 +188,13 @@ function analyticsIssueFromRow_(row, indexes) {
     status: String(value('status') || ''),
     statusId: value('statusId'),
     assigneeName: String(value('assigneeName') || ''),
+    milestone: String(value('milestone') || ''),
     csegOwner: String(value('csegOwner') || ''),
     team: String(value('team') || ''),
     qualityScore: value('qualityScore'),
     emergencyFlag: value('emergencyFlag'),
     tatBusinessDays: value('tatBusinessDays'),
-    point: value('point'),
+    point: milestonePoint_(value('milestone')) + (toBoolean_(value('emergencyFlag')) ? CSEG_APP.EMERGENCY_BONUS : 0),
     url: String(value('url') || '')
   };
 }

@@ -294,6 +294,20 @@ function optionalNumber_(value) {
   return isFinite(n) ? n : '';
 }
 
+/** Resolves the response point from a Backlog milestone such as SaaS:大(5h). */
+function milestonePoint_(value) {
+  const milestone = String(value || '').trim();
+  if (!milestone) return 1;
+  const matched = milestone.split(/[,、，\n\r]+/).map(function(item) {
+    const match = item.trim().match(/(?:^|[:：])\s*(最大|特大|極小|大|中|小)(?:\s*\([^)]*\))?\s*$/);
+    return match ? match[1] : '';
+  }).filter(Boolean);
+  if (!matched.length) return 1;
+  return matched.reduce(function(max, size) {
+    return Math.max(max, toNumber_(CSEG_APP.POINTS_BY_SIZE[size], 1));
+  }, 0);
+}
+
 function toBoolean_(value) {
   if (value === true || value === 1) return true;
   return ['true', '1', 'yes', 'on', '有', 'あり', '対象'].indexOf(String(value || '').toLowerCase()) >= 0;
