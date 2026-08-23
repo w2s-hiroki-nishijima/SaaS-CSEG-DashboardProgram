@@ -1,4 +1,54 @@
 /** Validated writes from the web application. */
+function submitFeedbackReport(input) {
+  const user = assertDomainUser_();
+  const type = String(input && input.type || '改善要望');
+  const title = String(input && input.title || '').trim();
+  const description = String(input && input.description || '').trim();
+  if (CSEG_FEEDBACK.TYPES.indexOf(type) < 0) throw new Error('報告種別が不正です。');
+  if (!title) throw new Error('タイトルを入力してください。');
+  if (!description) throw new Error('内容を入力してください。');
+  const now = nowIso_();
+  const report = {
+    reportId: 'feedback_' + Utilities.getUuid(), type: type,
+    title: title.slice(0, 200), description: description.slice(0, 5000), status: '未対応',
+    createdAt: now, createdByEmail: user.email, createdByName: user.name,
+    updatedAt: now, updatedBy: user.email
+  };
+  upsertRows_('FeedbackReports', [report], ['reportId']);
+  return { ok: true, view: buildFeedbackData_(user) };
+}
+
+function addFeedbackComment(input) {
+  const user = assertDomainUser_();
+  const reportId = String(input && input.reportId || '');
+  const commentText = String(input && input.comment || '').trim();
+  if (!readRows_('FeedbackReports').some(function(report) { return String(report.reportId) === reportId; })) {
+    throw new Error('対象の報告が見つかりません。');
+  }
+  if (!commentText) throw new Error('コメントを入力してください。');
+  const now = nowIso_();
+  upsertRows_('FeedbackComments', [{
+    commentId: 'comment_' + Utilities.getUuid(), reportId: reportId,
+    comment: commentText.slice(0, 3000), createdAt: now,
+    createdByEmail: user.email, createdByName: user.name
+  }], ['commentId']);
+  return { ok: true, view: buildFeedbackData_(user) };
+}
+
+function updateFeedbackStatus(input) {
+  const user = assertDomainUser_();
+  const reportId = String(input && input.reportId || '');
+  const status = String(input && input.status || '');
+  if (CSEG_FEEDBACK.STATUSES.indexOf(status) < 0) throw new Error('ステータスが不正です。');
+  const report = readRows_('FeedbackReports').find(function(row) { return String(row.reportId) === reportId; });
+  if (!report) throw new Error('対象の報告が見つかりません。');
+  report.status = status;
+  report.updatedAt = nowIso_();
+  report.updatedBy = user.email;
+  upsertRows_('FeedbackReports', [report], ['reportId']);
+  return { ok: true, view: buildFeedbackData_(user) };
+}
+
 function saveMonthlyTargets(payload) {
   assertAdmin_();
   throw new Error('目標件数はアサイン活用報告シートから自動計算されるため、管理画面からは変更できません。');

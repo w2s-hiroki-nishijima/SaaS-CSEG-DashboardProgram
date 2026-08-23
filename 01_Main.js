@@ -51,6 +51,7 @@ function buildInitialPageData_(page, month, user) {
   if (page === 'aggregate') return buildAggregateData_(month);
   if (page === 'notifications') return { rules: readRows_('NotificationRules') };
   if (page === 'settings') return buildSettingsView_(month);
+  if (page === 'feedback') return buildFeedbackData_(user);
   return buildDashboardData_(month);
 }
 
@@ -72,7 +73,8 @@ function buildBootstrapData_(user) {
       { id: 'notifications', label: '通知センター', icon: '◉', admin: true },
       { id: 'targets', label: 'メンバー目標件数', icon: '⌁', admin: true },
       { id: 'aggregate', label: 'アグリゲート', icon: '▥', admin: true },
-      { id: 'settings', label: '設定', icon: '⚙', admin: true }
+      { id: 'settings', label: '設定', icon: '⚙', admin: true },
+      { id: 'feedback', label: '改善要望・不具合報告', icon: '!' }
     ]
   };
 }
@@ -190,6 +192,11 @@ function getSkillView() {
 function getAssignmentView(month) {
   const user = assertDomainUser_();
   return buildAssignmentData_(monthKey_(month), user);
+}
+
+function getFeedbackView() {
+  const user = assertDomainUser_();
+  return buildFeedbackData_(user);
 }
 
 function getTargetView(month) {

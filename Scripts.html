@@ -6,7 +6,8 @@ const state = {
   skillMemberId: '',
   initialRoute: window.__INITIAL_ROUTE__ || null,
   restoringHistory: false,
-  entering: false
+  entering: false,
+  feedbackFilter: 'open'
 };
 
 const $ = s => document.querySelector(s);
@@ -105,7 +106,7 @@ function showLanding() {
 }
 
 function buildNav() {
-  const allowed = state.boot.pages.filter(p => !p.admin || state.boot.user.isAdmin);
+  const allowed = state.boot.pages.filter(p => p.id !== 'feedback' && (!p.admin || state.boot.user.isAdmin));
   $('#nav').innerHTML = allowed.map(p => (
     `<button class="nav-item" data-page="${p.id}" onclick="openPage('${p.id}')">` +
       `<span class="nav-icon">${p.icon}</span>` +
@@ -139,10 +140,11 @@ async function openPage(page, historyMode = 'push') {
 
 function preparePageChrome(page) {
   $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
+  $('#feedbackNav').classList.toggle('active', page === 'feedback');
   const meta = state.boot.pages.find(p => p.id === page);
   $('#pageTitle').textContent = meta ? meta.label : '';
   $('#pageEyebrow').textContent = page === 'dashboard' ? 'OVERVIEW' : page.toUpperCase();
-  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications'].includes(page));
+  $('#globalMonth').closest('label').classList.toggle('hidden', ['skills', 'notifications', 'feedback'].includes(page));
 }
 
 function renderInitialPage(page, data) {
@@ -154,6 +156,7 @@ function renderInitialPage(page, data) {
   if (page === 'aggregate') return renderAggregate(data);
   if (page === 'notifications') return renderNotifications(data);
   if (page === 'settings') return renderSettings(data);
+  if (page === 'feedback') return renderFeedback(data);
 }
 
 function reloadCurrentPage(pushHistory = false) {
@@ -178,6 +181,8 @@ async function renderPage(page) {
     return renderNotifications(await rpc('getNotificationView'));
   if (page === 'settings')
     return renderSettings(await rpc('getSettingsView', month));
+  if (page === 'feedback')
+    return renderFeedback(await rpc('getFeedbackView'));
 }
 
 function kpi(label, value, sub, cls = '') {
@@ -662,6 +667,107 @@ async function saveAssignment() {
     await rpc('saveAssignmentEntry', input);
     toast('保存しました');
     await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+function renderFeedback(d) {
+  state.cache.feedback = d;
+  const reports = d.reports.filter(report => {
+    if (state.feedbackFilter === 'all') return true;
+    if (state.feedbackFilter === 'complete') return report.status === '完了';
+    return report.status !== '完了';
+  });
+  $('#content').innerHTML = (
+    `<div class="feedback-grid">` +
+      `<section class="panel feedback-form-panel">` +
+        `<div class="panel-head"><div><div class="panel-title">改善要望・不具合を投稿</div><div class="panel-sub">困っていることや改善案を共有してください</div></div></div>` +
+        `<div class="panel-body">` +
+          `<div class="field"><label>種別</label><select id="feedbackType">${d.types.map(type => `<option>${esc(type)}</option>`).join('')}</select></div>` +
+          `<div class="field"><label>タイトル</label><input id="feedbackTitle" maxlength="200" placeholder="内容が分かる短いタイトル"></div>` +
+          `<div class="field"><label>内容</label><textarea id="feedbackDescription" rows="10" maxlength="5000" placeholder="発生した状況、期待する動作、改善案など"></textarea></div>` +
+          `<div class="actions"><button class="primary" onclick="submitFeedback()">投稿する</button></div>` +
+        `</div>` +
+      `</section>` +
+      `<section class="panel feedback-list-panel">` +
+        `<div class="panel-head">` +
+          `<div><div class="panel-title">投稿された報告</div><div class="panel-sub">未完了の報告を更新順に表示</div></div>` +
+          `<select onchange="state.feedbackFilter=this.value;renderFeedback(state.cache.feedback)">` +
+            `<option value="open" ${state.feedbackFilter === 'open' ? 'selected' : ''}>完了以外</option>` +
+            `<option value="complete" ${state.feedbackFilter === 'complete' ? 'selected' : ''}>完了のみ</option>` +
+            `<option value="all" ${state.feedbackFilter === 'all' ? 'selected' : ''}>すべて</option>` +
+          `</select>` +
+        `</div>` +
+        `<div class="feedback-list">` +
+          (reports.length ? reports.map((report, index) => feedbackCard(report, d.statuses, index)).join('') : '<div class="empty">対象の報告はありません</div>') +
+        `</div>` +
+      `</section>` +
+    `</div>`
+  );
+}
+
+function feedbackCard(report, statuses, index) {
+  const comments = Array.isArray(report.comments) ? report.comments : [];
+  return (
+    `<article class="feedback-card ${index % 2 ? 'feedback-alt' : ''}">` +
+      `<div class="feedback-card-head">` +
+        `<div><span class="pill">${esc(report.type)}</span><h3>${esc(report.title)}</h3></div>` +
+        `<select onchange="changeFeedbackStatus('${esc(report.reportId)}',this.value)">` +
+          statuses.map(status => `<option value="${esc(status)}" ${status === report.status ? 'selected' : ''}>${esc(status)}</option>`).join('') +
+        `</select>` +
+      `</div>` +
+      `<div class="feedback-meta">${esc(report.createdByName || report.createdByEmail)} · ${esc(report.createdAt)}</div>` +
+      `<div class="feedback-description">${esc(report.description).replace(/\n/g, '<br>')}</div>` +
+      `<div class="feedback-comments">` +
+        `<strong>コメント ${comments.length}件</strong>` +
+        comments.map(comment => `<div class="feedback-comment"><div>${esc(comment.comment).replace(/\n/g, '<br>')}</div><small>${esc(comment.createdByName || comment.createdByEmail)} · ${esc(comment.createdAt)}</small></div>`).join('') +
+        `<div class="feedback-comment-form"><textarea rows="2" maxlength="3000" data-comment-for="${esc(report.reportId)}" placeholder="コメントを入力"></textarea><button class="secondary" onclick="postFeedbackComment('${esc(report.reportId)}')">コメント</button></div>` +
+      `</div>` +
+    `</article>`
+  );
+}
+
+async function submitFeedback() {
+  busy(true, '報告を投稿しています...');
+  try {
+    const result = await rpc('submitFeedbackReport', {
+      type: $('#feedbackType').value,
+      title: $('#feedbackTitle').value,
+      description: $('#feedbackDescription').value
+    });
+    state.feedbackFilter = 'open';
+    renderFeedback(result.view);
+    toast('報告を投稿しました');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+async function postFeedbackComment(reportId) {
+  const textarea = document.querySelector(`[data-comment-for="${reportId}"]`);
+  busy(true, 'コメントを投稿しています...');
+  try {
+    const result = await rpc('addFeedbackComment', { reportId, comment: textarea ? textarea.value : '' });
+    renderFeedback(result.view);
+    toast('コメントを投稿しました');
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+async function changeFeedbackStatus(reportId, status) {
+  busy(true, 'ステータスを更新しています...');
+  try {
+    const result = await rpc('updateFeedbackStatus', { reportId, status });
+    renderFeedback(result.view);
+    toast('ステータスを更新しました');
   } catch (e) {
     toast(e.message, true);
   } finally {

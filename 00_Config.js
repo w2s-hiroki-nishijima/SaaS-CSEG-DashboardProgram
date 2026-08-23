@@ -188,7 +188,9 @@ const CSEG_SHEETS = Object.freeze({
   SyncLog: ['syncId', 'startedAt', 'finishedAt', 'mode', 'status', 'fetchedCount', 'insertedCount', 'updatedCount', 'message'],
   AnalyticsCache: ['cacheKey', 'payloadJson', 'sourceUpdatedAt', 'updatedAt'],
   PerformanceIssues: ['month', 'memberName', 'sourceTeam', 'issueKey', 'summary', 'milestone', 'point', 'emergencyFlag', 'tatBusinessDays', 'url'],
-  PerformanceIssueIndex: ['indexKey', 'month', 'memberName', 'startRow', 'rowCount', 'updatedAt']
+  PerformanceIssueIndex: ['indexKey', 'month', 'memberName', 'startRow', 'rowCount', 'updatedAt'],
+  FeedbackReports: ['reportId', 'type', 'title', 'description', 'status', 'createdAt', 'createdByEmail', 'createdByName', 'updatedAt', 'updatedBy'],
+  FeedbackComments: ['commentId', 'reportId', 'comment', 'createdAt', 'createdByEmail', 'createdByName']
 });
 
 const CSEG_SHEET_HEADERS = Object.freeze({
