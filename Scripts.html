@@ -336,12 +336,13 @@ async function togglePerformanceDetails(button, event) {
     detailRow.dataset.loaded = 'true';
     content.innerHTML = data.rows.length ? (
       `<div class="table-wrap"><table class="table">` +
-        `<thead><tr><th>件名</th><th>マイルストーン</th><th>評価ポイント</th><th>対応日数（TAT）</th></tr></thead>` +
+        `<thead><tr><th>件名</th><th>マイルストーン</th><th>緊急</th><th>評価ポイント</th><th>対応日数（TAT）</th></tr></thead>` +
         `<tbody>` +
         data.rows.map(issue => (
           `<tr>` +
             `<td><a href="${esc(issue.url)}" target="_blank" rel="noopener">${esc(issue.summary || issue.issueKey)}</a></td>` +
             `<td>${esc(issue.milestone || '-')}</td>` +
+            `<td>${String(issue.emergencyFlag) === 'true' || issue.emergencyFlag === true ? '<span class="pill red">緊急</span>' : '-'}</td>` +
             `<td>${num(issue.point, 2)}</td>` +
             `<td>${issue.tatBusinessDays === '' ? '-' : num(issue.tatBusinessDays, 0)}</td>` +
           `</tr>`

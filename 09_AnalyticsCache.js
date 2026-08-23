@@ -126,6 +126,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     }
 
     const rebuiltAt = nowIso_();
+    finalizePerformanceIssueIndex_(rebuiltAt);
     const rows = Object.keys(work.months).sort().map(function(month) {
       return {
         cacheKey: 'month:' + month,
@@ -137,7 +138,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 6, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 7, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -163,7 +164,10 @@ function initializeAnalyticsRebuild_(mode) {
     return String(row.cacheKey || '').indexOf('work:') !== 0;
   });
   replaceAllRows_('AnalyticsCache', existing);
+  getSheet_('PerformanceIssues').getRange(1, 1, 1, CSEG_SHEETS.PerformanceIssues.length)
+    .setValues([CSEG_SHEETS.PerformanceIssues]);
   replaceAllRows_('PerformanceIssues', []);
+  replaceAllRows_('PerformanceIssueIndex', []);
   const state = {
     mode: mode,
     nextRow: 2,
@@ -180,6 +184,7 @@ function initializeAnalyticsRebuild_(mode) {
 
 function analyticsIssueFromRow_(row, indexes) {
   function value(name) { return row[indexes[name]]; }
+  const emergency = analyticsEmergencyFlag_(value('emergencyFlag'), value('customFieldsJson'));
   return {
     issueKey: String(value('issueKey') || ''),
     summary: String(value('summary') || ''),
@@ -193,11 +198,27 @@ function analyticsIssueFromRow_(row, indexes) {
     csegOwner: String(value('csegOwner') || ''),
     team: String(value('team') || ''),
     qualityScore: value('qualityScore'),
-    emergencyFlag: value('emergencyFlag'),
+    emergencyFlag: emergency,
     tatBusinessDays: value('tatBusinessDays'),
-    point: milestonePoint_(value('milestone')) + (toBoolean_(value('emergencyFlag')) ? CSEG_APP.EMERGENCY_BONUS : 0),
+    point: milestonePoint_(value('milestone')) + (emergency ? CSEG_APP.EMERGENCY_BONUS : 0),
     url: String(value('url') || '')
   };
+}
+
+function analyticsEmergencyFlag_(storedValue, customFieldsJson) {
+  if (toBoolean_(storedValue)) return true;
+  try {
+    const accepted = CSEG_APP.CUSTOM_FIELDS.emergencyFlag || [];
+    const fields = JSON.parse(String(customFieldsJson || '[]'));
+    const field = fields.find(function(item) { return accepted.indexOf(String(item.name || '')) >= 0; });
+    if (!field) return false;
+    const value = field.value && typeof field.value === 'object' && field.value.name != null
+      ? field.value.name
+      : field.value;
+    return toBoolean_(value);
+  } catch (ignore) {
+    return false;
+  }
 }
 
 function applyIssueToAnalyticsWork_(work, issue, today) {
@@ -284,15 +305,47 @@ function buildPerformanceIssueRows_(issue) {
   if (!owners.length) owners.push('未設定');
   const rows = [];
   owners.forEach(function(owner) {
-    teams.forEach(function(team) {
-      rows.push({
-        month: dueDate.slice(0, 7), memberName: owner, sourceTeam: team,
-        issueKey: issue.issueKey, summary: issue.summary, milestone: issue.milestone,
-        point: issue.point, tatBusinessDays: issue.tatBusinessDays, url: issue.url
-      });
+    rows.push({
+      month: dueDate.slice(0, 7), memberName: owner, sourceTeam: teams.join(', '),
+      issueKey: issue.issueKey, summary: issue.summary, milestone: issue.milestone,
+      point: issue.point, emergencyFlag: toBoolean_(issue.emergencyFlag),
+      tatBusinessDays: issue.tatBusinessDays, url: issue.url
     });
   });
   return rows;
+}
+
+function finalizePerformanceIssueIndex_(updatedAt) {
+  const sheet = getSheet_('PerformanceIssues');
+  const headers = CSEG_SHEETS.PerformanceIssues;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    replaceAllRows_('PerformanceIssueIndex', []);
+    return;
+  }
+  sheet.getRange(2, 1, lastRow - 1, headers.length).sort([
+    { column: 1, ascending: true },
+    { column: 2, ascending: true },
+    { column: 4, ascending: true }
+  ]);
+  const keys = sheet.getRange(2, 1, lastRow - 1, 2).getDisplayValues();
+  const indexRows = [];
+  let current = null;
+  keys.forEach(function(row, offset) {
+    const month = String(row[0] || '');
+    const memberName = String(row[1] || '');
+    const indexKey = month + '\u001f' + memberName;
+    if (!current || current.indexKey !== indexKey) {
+      current = {
+        indexKey: indexKey, month: month, memberName: memberName,
+        startRow: offset + 2, rowCount: 0, updatedAt: updatedAt
+      };
+      indexRows.push(current);
+    }
+    current.rowCount++;
+  });
+  replaceAllRows_('PerformanceIssueIndex', indexRows);
+  clearSheetCache_('PerformanceIssues');
 }
 
 function loadAnalyticsWork_() {

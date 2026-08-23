@@ -186,7 +186,8 @@ const CSEG_SHEETS = Object.freeze({
   Settings: ['key', 'value', 'description', 'updatedAt', 'updatedBy'],
   SyncLog: ['syncId', 'startedAt', 'finishedAt', 'mode', 'status', 'fetchedCount', 'insertedCount', 'updatedCount', 'message'],
   AnalyticsCache: ['cacheKey', 'payloadJson', 'sourceUpdatedAt', 'updatedAt'],
-  PerformanceIssues: ['month', 'memberName', 'sourceTeam', 'issueKey', 'summary', 'milestone', 'point', 'tatBusinessDays', 'url']
+  PerformanceIssues: ['month', 'memberName', 'sourceTeam', 'issueKey', 'summary', 'milestone', 'point', 'emergencyFlag', 'tatBusinessDays', 'url'],
+  PerformanceIssueIndex: ['indexKey', 'month', 'memberName', 'startRow', 'rowCount', 'updatedAt']
 });
 
 const CSEG_SHEET_HEADERS = Object.freeze({
@@ -311,5 +312,5 @@ function milestonePoint_(value) {
 
 function toBoolean_(value) {
   if (value === true || value === 1) return true;
-  return ['true', '1', 'yes', 'on', '有', 'あり', '対象'].indexOf(String(value || '').toLowerCase()) >= 0;
+  return ['true', '1', 'yes', 'on', '有', 'あり', '対象', '〇', '○'].indexOf(String(value || '').toLowerCase()) >= 0;
 }

@@ -79,20 +79,28 @@ function getPerformanceMemberIssues(month, memberName) {
   const targetMonth = monthKey_(month);
   const name = String(memberName || '').trim();
   if (!name) throw new Error('メンバー名が指定されていません。');
-  const seen = {};
-  const rows = readRows_('PerformanceIssues').filter(function(row) {
-    return String(row.month) === targetMonth && String(row.memberName) === name;
-  }).filter(function(row) {
-    const key = String(row.issueKey || '');
-    if (seen[key]) return false;
-    seen[key] = true;
-    return true;
+  const indexKey = targetMonth + '\u001f' + name;
+  const index = readRows_('PerformanceIssueIndex').find(function(row) {
+    return String(row.indexKey) === indexKey;
   });
-  rows.sort(function(a, b) { return String(a.issueKey).localeCompare(String(b.issueKey)); });
+  let rows = index ? readIndexedPerformanceIssues_(index) : [];
   if (!rows.length) {
     Array.prototype.push.apply(rows, readPerformanceIssuesFromBacklog_(targetMonth, name));
   }
   return { month: targetMonth, memberName: name, rows: rows };
+}
+
+function readIndexedPerformanceIssues_(index) {
+  const sheet = getSheet_('PerformanceIssues');
+  const headers = CSEG_SHEETS.PerformanceIssues;
+  const startRow = Math.max(2, Math.floor(toNumber_(index.startRow, 2)));
+  const rowCount = Math.max(0, Math.floor(toNumber_(index.rowCount)));
+  if (!rowCount) return [];
+  return sheet.getRange(startRow, 1, rowCount, headers.length).getValues().map(function(values) {
+    const row = {};
+    headers.forEach(function(header, column) { row[header] = values[column]; });
+    return row;
+  });
 }
 
 function readPerformanceIssuesFromBacklog_(month, memberName) {
@@ -117,7 +125,7 @@ function readPerformanceIssuesFromBacklog_(month, memberName) {
     result.push({
       month: month, memberName: memberName, issueKey: issue.issueKey,
       summary: issue.summary, milestone: issue.milestone, point: issue.point,
-      tatBusinessDays: issue.tatBusinessDays, url: issue.url
+      emergencyFlag: toBoolean_(issue.emergencyFlag), tatBusinessDays: issue.tatBusinessDays, url: issue.url
     });
   });
   result.sort(function(a, b) { return String(a.issueKey).localeCompare(String(b.issueKey)); });
