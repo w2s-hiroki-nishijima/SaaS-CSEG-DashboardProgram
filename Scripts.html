@@ -622,9 +622,9 @@ function renderTargets(d) {
       `<div class="panel-head">` +
         `<div>` +
           `<div class="panel-title">${esc(d.month)} メンバー目標件数</div>` +
-          `<div class="panel-sub">実質スピード ×（アサイン時間 − マイナス − 調整）÷ ${d.baseHours}</div>` +
+          `<div class="panel-sub">目標件数スプレッドシートを参照｜実質スピード ×（アサイン時間 − マイナス − 調整）÷ ${d.baseHours}</div>` +
         `</div>` +
-        `<button class="primary" onclick="saveTargets()">一括保存</button>` +
+        `<button class="primary" onclick="saveTargets()">シートへ確定保存</button>` +
       `</div>` +
       `<div class="table-wrap">` +
         `<table class="table" id="targetTable">` +
@@ -637,7 +637,6 @@ function renderTargets(d) {
               `<th>アサイン時間</th>` +
               `<th>マイナス</th>` +
               `<th>調整</th>` +
-              `<th>サポート</th>` +
               `<th>目標件数</th>` +
             `</tr>` +
           `</thead>` +
@@ -658,9 +657,6 @@ function renderTargets(d) {
                 `</td>` +
                 `<td>` +
                   `<input class="t-adjust" type="number" min="0" step="0.5" value="${r.adjustmentHours}" oninput="recalcTarget(this)">` +
-                `</td>` +
-                `<td>` +
-                  `<input class="t-support" type="number" min="0" step="0.5" value="${r.supportHours}">` +
                 `</td>` +
                 `<td class="t-result" data-speed="${r.speedCoefficient}">` +
                   `<strong>${num(r.targetCount, 1)}</strong>` +
@@ -688,13 +684,12 @@ async function saveTargets() {
     memberId: tr.dataset.id,
     assignmentHours: tr.querySelector('.t-assignment').value,
     minusHours: tr.querySelector('.t-minus').value,
-    adjustmentHours: tr.querySelector('.t-adjust').value,
-    supportHours: tr.querySelector('.t-support').value
+    adjustmentHours: tr.querySelector('.t-adjust').value
   }));
-  busy(true, '目標件数を保存しています...');
+  busy(true, '目標件数シートへ保存しています...');
   try {
     await rpc('saveMonthlyTargets', { month: $('#globalMonth').value, rows });
-    toast('目標件数を保存しました');
+    toast('月別シートへ目標件数を確定保存しました');
     await reloadCurrentPage();
   } catch (e) {
     toast(e.message, true);

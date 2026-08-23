@@ -169,6 +169,61 @@ function readMonthlyTeamMembership_(month) {
     .filter(function(row) { return row.name; });
 }
 
+/** Reads the selected month's target roster directly from the target workbook (A:H). */
+function readMonthlyTargetRows_(month) {
+  const sheet = getMonthlyTeamSheet_(month);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, 8).getValues();
+  const displays = sheet.getRange(2, 1, lastRow - 1, 8).getDisplayValues();
+  const membersByName = {};
+  readRows_('Members').forEach(function(member) {
+    membersByName[String(member.name || '').trim()] = member;
+  });
+  return values.map(function(row, index) {
+    const shown = displays[index];
+    const name = String(shown[0] || '').trim();
+    if (!name) return null;
+    const member = membersByName[name] || {};
+    const combinedLevel = String(shown[1] || '').trim();
+    const separator = combinedLevel.lastIndexOf('-');
+    const skillLevel = separator > 0 ? combinedLevel.slice(0, separator) : String(member.skillLevel || combinedLevel);
+    const experienceLevel = separator > 0 ? 'CSEG' + combinedLevel.slice(separator + 1) : String(member.experienceLevel || '');
+    return {
+      rowNumber: index + 2,
+      month: monthKey_(month),
+      memberId: member.memberId || 'sheet:' + name,
+      memberName: name,
+      team: String(shown[2] || '').trim(),
+      skillLevel: skillLevel,
+      experienceLevel: experienceLevel,
+      speedCoefficient: toNumber_(row[3]),
+      assignmentHours: toNumber_(row[4]),
+      minusHours: toNumber_(row[5]),
+      adjustmentHours: toNumber_(row[6]),
+      supportHours: 0,
+      targetCount: toNumber_(row[7])
+    };
+  }).filter(Boolean);
+}
+
+/** Writes monthly inputs and the calculated target back to E:H as a fixed snapshot. */
+function saveMonthlyTargetRows_(month, rows) {
+  const sheet = getMonthlyTeamSheet_(month);
+  const source = readMonthlyTargetRows_(month);
+  const byId = {};
+  source.forEach(function(row) { byId[String(row.memberId)] = row; });
+  rows.forEach(function(input) {
+    const current = byId[String(input.memberId)];
+    if (!current) throw new Error('月別目標シートにメンバーが見つかりません: ' + input.memberId);
+    const assignment = nonNegative_(input.assignmentHours);
+    const minus = nonNegative_(input.minusHours);
+    const adjustment = nonNegative_(input.adjustmentHours);
+    const target = round_(Math.max(0, current.speedCoefficient * (assignment - minus - adjustment) / CSEG_APP.TARGET_BASE_HOURS), 1);
+    sheet.getRange(current.rowNumber, 5, 1, 4).setValues([[assignment, minus, adjustment, target]]);
+  });
+}
+
 /** Applies the selected month's team to the app member master without changing the master itself. */
 function getMembersForMonth_(month) {
   const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });

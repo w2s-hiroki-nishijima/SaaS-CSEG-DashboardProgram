@@ -1,26 +1,10 @@
 /** Validated writes from the web application. */
 function saveMonthlyTargets(payload) {
-  const user = assertAdmin_();
+  assertAdmin_();
   if (!payload || !Array.isArray(payload.rows)) throw new Error('保存データが不正です。');
   const month = monthKey_(payload.month);
-  const members = getMembersForMonth_(month);
-  const rows = payload.rows.map(function(input) {
-    const member = members.find(function(m) { return String(m.memberId) === String(input.memberId); });
-    if (!member) throw new Error('メンバーが見つかりません: ' + input.memberId);
-    const speed = toNumber_(member.speedCoefficient, calculateSpeed_(member));
-    const assignment = nonNegative_(input.assignmentHours);
-    const minus = nonNegative_(input.minusHours);
-    const adjustment = nonNegative_(input.adjustmentHours);
-    return {
-      month: month, memberId: member.memberId, memberName: member.name, team: member.team,
-      speedCoefficient: speed, assignmentHours: assignment, minusHours: minus, adjustmentHours: adjustment,
-      supportHours: nonNegative_(input.supportHours),
-      targetCount: round_(Math.max(0, speed * (assignment - minus - adjustment) / CSEG_APP.TARGET_BASE_HOURS), 1),
-      updatedAt: nowIso_(), updatedBy: user.email
-    };
-  });
-  const result = upsertRows_('MonthlyTargets', rows, ['month', 'memberId']);
-  return { ok: true, result: result, view: buildTargetData_(month) };
+  saveMonthlyTargetRows_(month, payload.rows);
+  return { ok: true, result: { updated: payload.rows.length }, view: buildTargetData_(month) };
 }
 
 function saveAssignmentEntry(input) {

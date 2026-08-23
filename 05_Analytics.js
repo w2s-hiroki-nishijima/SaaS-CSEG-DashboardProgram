@@ -1,12 +1,6 @@
 /** Dashboard, performance, target and aggregate calculations. */
 function getMonthTargets_(month) {
-  const teamByName = {};
-  readMonthlyTeamMembership_(month).forEach(function(row) { teamByName[row.name] = row.team; });
-  return readRows_('MonthlyTargets').filter(function(row) { return String(row.month) === month; }).map(function(row) {
-    const out = Object.assign({}, row);
-    if (Object.prototype.hasOwnProperty.call(teamByName, out.memberName)) out.team = teamByName[out.memberName];
-    return out;
-  });
+  return readMonthlyTargetRows_(month);
 }
 
 function buildDashboardData_(month) {
@@ -97,24 +91,17 @@ function buildPerformanceData_(month) {
 }
 
 function buildTargetData_(month) {
-  const members = getMembersForMonth_(month);
-  const current = readRows_('MonthlyTargets').filter(function(r) { return String(r.month) === month; });
-  const byId = {};
-  current.forEach(function(r) { byId[String(r.memberId)] = r; });
+  const current = readMonthlyTargetRows_(month);
   return {
     month: month,
     baseHours: CSEG_APP.TARGET_BASE_HOURS,
-    rows: members.map(function(m) {
-      const row = byId[String(m.memberId)] || {};
-      const speed = toNumber_(m.speedCoefficient, calculateSpeed_(m));
-      const assignment = toNumber_(row.assignmentHours);
-      const minus = toNumber_(row.minusHours);
-      const adjustment = toNumber_(row.adjustmentHours);
+    rows: current.map(function(row) {
       return {
-        memberId: m.memberId, memberName: m.name, team: m.team,
-        skillLevel: m.skillLevel, experienceLevel: m.experienceLevel, speedCoefficient: speed,
-        assignmentHours: assignment, minusHours: minus, adjustmentHours: adjustment,
-        supportHours: toNumber_(row.supportHours), targetCount: round_(Math.max(0, speed * (assignment - minus - adjustment) / CSEG_APP.TARGET_BASE_HOURS), 1)
+        memberId: row.memberId, memberName: row.memberName, team: row.team,
+        skillLevel: row.skillLevel, experienceLevel: row.experienceLevel,
+        speedCoefficient: row.speedCoefficient, assignmentHours: row.assignmentHours,
+        minusHours: row.minusHours, adjustmentHours: row.adjustmentHours,
+        supportHours: 0, targetCount: round_(row.targetCount, 1)
       };
     })
   };
