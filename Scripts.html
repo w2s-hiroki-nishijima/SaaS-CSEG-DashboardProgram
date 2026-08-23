@@ -258,7 +258,7 @@ function renderPerformance(d) {
         `</select>` +
         `<input id="memberSearch" placeholder="メンバー検索" oninput="filterPerformance()">` +
       `</div>` +
-      `<span class="pill">${d.rows.length}名</span>` +
+      `<span class="pill">${d.memberCount == null ? d.rows.length : d.memberCount}名</span>` +
     `</div>` +
     `<section class="panel">` +
       `<div class="table-wrap">` +

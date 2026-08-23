@@ -38,23 +38,29 @@ function buildPerformanceData_(month) {
   const snapshot = getMonthlyIssueSnapshot_(month);
   const targets = getMonthTargets_(month);
   const members = getMembersForMonth_(month);
+  const memberByName = {};
+  members.forEach(function(m) { memberByName[m.name] = m; });
   const byMember = {};
-  members.forEach(function(m) {
-    byMember[m.name] = {
-      memberId: m.memberId, name: m.name, team: m.team, completedCount: 0, points: 0,
-      emergencyCount: 0, qualitySum: 0, qualityCount: 0, tat2: 0, tat5: 0, tat6: 0, targetCount: 0
-    };
-  });
+  function metricKey(name, team) { return String(name || '') + '\u001f' + String(team || '未設定'); }
+  function ensureMember(name, team) {
+    const key = metricKey(name, team);
+    if (!byMember[key]) {
+      const member = memberByName[name] || {};
+      byMember[key] = {
+        memberId: member.memberId || '', name: name, team: team || '未設定', completedCount: 0, points: 0,
+        emergencyCount: 0, qualitySum: 0, qualityCount: 0, tat2: 0, tat5: 0, tat6: 0, targetCount: 0
+      };
+    }
+    return byMember[key];
+  }
   targets.forEach(function(t) {
     const name = t.memberName || memberNameById_(t.memberId, members);
-    if (!byMember[name]) byMember[name] = emptyMemberMetric_(name, t.team);
-    byMember[name].targetCount += toNumber_(t.targetCount);
+    ensureMember(name, t.team).targetCount += toNumber_(t.targetCount);
   });
-  Object.keys(snapshot.members || {}).forEach(function(name) {
-    const source = snapshot.members[name];
-    if (!byMember[name]) byMember[name] = emptyMemberMetric_(name, source.team);
-    const metric = byMember[name];
-    if (!metric.team) metric.team = source.team || '';
+  Object.keys(snapshot.members || {}).forEach(function(key) {
+    const source = snapshot.members[key];
+    const name = source.name || key.split('\u001f')[0];
+    const metric = ensureMember(name, source.team);
     metric.completedCount += toNumber_(source.completedCount);
     metric.points += toNumber_(source.points);
     metric.emergencyCount += toNumber_(source.emergencyCount);
@@ -64,8 +70,8 @@ function buildPerformanceData_(month) {
     metric.tat5 += toNumber_(source.tat5);
     metric.tat6 += toNumber_(source.tat6);
   });
-  const rows = Object.keys(byMember).map(function(name) {
-    const m = byMember[name];
+  const rows = Object.keys(byMember).map(function(key) {
+    const m = byMember[key];
     return {
       memberId: m.memberId || '', name: m.name, team: m.team || '', completedCount: m.completedCount,
       points: round_(m.points, 2), emergencyCount: m.emergencyCount,
@@ -75,7 +81,12 @@ function buildPerformanceData_(month) {
     };
   }).filter(function(r) { return r.completedCount || r.targetCount; });
   rows.sort(function(a, b) { return b.points - a.points || a.name.localeCompare(b.name, 'ja'); });
-  return { month: month, rows: rows, teams: unique_(rows.map(function(r) { return r.team; }).filter(Boolean)) };
+  return {
+    month: month,
+    rows: rows,
+    memberCount: unique_(rows.map(function(r) { return r.name; }).filter(Boolean)).length,
+    teams: unique_(rows.map(function(r) { return r.team; }).filter(Boolean))
+  };
 }
 
 function buildTargetData_(month) {

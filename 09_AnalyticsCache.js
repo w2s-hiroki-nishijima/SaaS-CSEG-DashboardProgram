@@ -137,7 +137,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
     rows.push({ cacheKey: 'overdue', payloadJson: JSON.stringify(work.overdue), sourceUpdatedAt: state.sourceUpdatedAt, updatedAt: rebuiltAt });
     rows.push({
       cacheKey: 'meta',
-      payloadJson: JSON.stringify({ schemaVersion: 2, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
+      payloadJson: JSON.stringify({ schemaVersion: 3, issueCount: state.issueCount, monthCount: Object.keys(work.months).length, rebuiltAt: rebuiltAt }),
       sourceUpdatedAt: state.sourceUpdatedAt,
       updatedAt: rebuiltAt
     });
@@ -206,7 +206,8 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
       ? dueDate.slice(0, 7)
       : '';
 
-  const team = String(issue.team || '未設定');
+  const teams = splitCsegTeams_(issue.team);
+  if (teams.length === 0) teams.push('未設定');
 
   // 月別実績は、すべて期限日の月へ計上する
   if (dueMonth) {
@@ -226,13 +227,15 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
     dueBucket.dailyCompleted[dueDate] =
       (dueBucket.dailyCompleted[dueDate] || 0) + 1;
 
-    dueBucket.createdByTeam[team] =
-      (dueBucket.createdByTeam[team] || 0) + 1;
+    teams.forEach(function(team) {
+      dueBucket.createdByTeam[team] =
+        (dueBucket.createdByTeam[team] || 0) + 1;
+    });
 
     addCompletedIssueToBucket_(
       dueBucket,
       issue,
-      team,
+      teams,
       dueDate
     );
   }
@@ -245,8 +248,10 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
   ) {
     work.overdue.count++;
 
-    work.overdue.byTeam[team] =
-      (work.overdue.byTeam[team] || 0) + 1;
+    teams.forEach(function(team) {
+      work.overdue.byTeam[team] =
+        (work.overdue.byTeam[team] || 0) + 1;
+    });
 
     work.overdue.tickets.push(
       issueListItem_(issue)
@@ -323,7 +328,7 @@ function ensureMonthBucket_(months, month) {
 function addCompletedIssueToBucket_(
   bucket,
   issue,
-  team,
+  teams,
   dueDate
 ) {
   const point = toNumber_(issue.point, 1);
@@ -346,19 +351,11 @@ function addCompletedIssueToBucket_(
     bucket.qualityCount++;
   }
 
-  // チーム集計
-  const teamMetric = ensureIssueMetric_(
-    bucket.teams,
-    team
-  );
-
-  addCompletedMetric_(
-    teamMetric,
-    issue,
-    point,
-    quality,
-    hasQuality
-  );
+  // 複数チームの場合、各チームに1件ずつ計上する
+  teams.forEach(function(team) {
+    const teamMetric = ensureIssueMetric_(bucket.teams, team);
+    addCompletedMetric_(teamMetric, issue, point, quality, hasQuality);
+  });
 
   // SaaS-CSEG主担当のみ使用する
   // 通常の担当者へのフォールバックは行わない
@@ -370,40 +367,17 @@ function addCompletedIssueToBucket_(
     owners.push('未設定');
   }
 
-  // 複数名の場合、各メンバーに1件ずつ計上する
+  // 複数名・複数チームを担当者×チームに展開して各組み合わせへ計上する
   owners.forEach(function (owner) {
-    // 未設定はチームごとに別の集計キーを使用する
-    const memberKey =
-      owner === '未設定'
-        ? '未設定__' + team
-        : owner;
-
-    const memberMetric = ensureIssueMetric_(
-      bucket.members,
-      memberKey
-    );
-
-    // 表示名は従来どおり「未設定」にする
-    memberMetric.name = owner;
-
-    if (
-      !memberMetric.team ||
-      memberMetric.team === '未設定'
-    ) {
+    teams.forEach(function(team) {
+      const memberKey = owner + '\u001f' + team;
+      const memberMetric = ensureIssueMetric_(bucket.members, memberKey);
+      memberMetric.name = owner;
       memberMetric.team = team;
-    }
 
-    addCompletedMetric_(
-      memberMetric,
-      issue,
-      point,
-      quality,
-      hasQuality
-    );
-
-    if (toBoolean_(issue.emergencyFlag)) {
-      memberMetric.emergencyCount++;
-    }
+      addCompletedMetric_(memberMetric, issue, point, quality, hasQuality);
+      if (toBoolean_(issue.emergencyFlag)) memberMetric.emergencyCount++;
+    });
   });
 }
 
@@ -557,4 +531,8 @@ function splitCsegOwners_(value) {
 
   // 同じ名前が重複していても、1チケット1件まで
   return Array.from(new Set(owners));
+}
+
+function splitCsegTeams_(value) {
+  return splitCsegOwners_(value);
 }
