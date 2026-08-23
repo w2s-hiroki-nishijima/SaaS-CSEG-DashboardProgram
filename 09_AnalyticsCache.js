@@ -465,11 +465,75 @@ function getAnalyticsCacheMap_() {
 
 function getMonthlyIssueSnapshot_(month) {
   const map = getAnalyticsCacheMap_();
-  return map['month:' + month] || ensureMonthBucket_({}, month);
+  return normalizeSnapshotTeams_(map['month:' + month] || ensureMonthBucket_({}, month));
 }
 
 function getOverdueSnapshot_() {
-  return getAnalyticsCacheMap_().overdue || { count: 0, byTeam: {}, tickets: [] };
+  const source = getAnalyticsCacheMap_().overdue || { count: 0, byTeam: {}, tickets: [] };
+  return {
+    count: toNumber_(source.count),
+    byTeam: normalizeTeamCountMap_(source.byTeam || {}),
+    tickets: source.tickets || []
+  };
+}
+
+/** Keeps old cache rows compatible after team values became multi-select. */
+function normalizeSnapshotTeams_(source) {
+  const snapshot = Object.assign({}, source);
+  snapshot.createdByTeam = normalizeTeamCountMap_(source.createdByTeam || {});
+  snapshot.teams = normalizeTeamMetricMap_(source.teams || {});
+  snapshot.members = normalizeMemberTeamMetricMap_(source.members || {});
+  return snapshot;
+}
+
+function normalizeTeamCountMap_(source) {
+  const out = {};
+  Object.keys(source || {}).forEach(function(teamValue) {
+    const teams = splitCsegTeams_(teamValue);
+    if (!teams.length) teams.push('未設定');
+    teams.forEach(function(team) {
+      out[team] = (out[team] || 0) + toNumber_(source[teamValue]);
+    });
+  });
+  return out;
+}
+
+function normalizeTeamMetricMap_(source) {
+  const out = {};
+  Object.keys(source || {}).forEach(function(teamValue) {
+    const teams = splitCsegTeams_(teamValue);
+    if (!teams.length) teams.push('未設定');
+    teams.forEach(function(team) {
+      mergeIssueMetric_(out, team, source[teamValue], team, team);
+    });
+  });
+  return out;
+}
+
+function normalizeMemberTeamMetricMap_(source) {
+  const out = {};
+  Object.keys(source || {}).forEach(function(key) {
+    const metric = source[key] || {};
+    const name = metric.name || String(key).split('\u001f')[0] || '未設定';
+    const teams = splitCsegTeams_(metric.team);
+    if (!teams.length) teams.push('未設定');
+    teams.forEach(function(team) {
+      mergeIssueMetric_(out, name + '\u001f' + team, metric, name, team);
+    });
+  });
+  return out;
+}
+
+function mergeIssueMetric_(map, key, source, name, team) {
+  const target = ensureIssueMetric_(map, key);
+  target.name = name;
+  target.team = team;
+  [
+    'completedCount', 'points', 'emergencyCount', 'qualitySum', 'qualityCount',
+    'tatCount', 'tat2', 'tat5', 'tat6'
+  ].forEach(function(field) {
+    target[field] = toNumber_(target[field]) + toNumber_(source[field]);
+  });
 }
 
 function scheduleAnalyticsRebuild_() {

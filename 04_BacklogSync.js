@@ -201,6 +201,11 @@ function normalizeBacklogIssue_(
 
   const closedAt = dateKey_(completed);
 
+  // BacklogIssuesの互換列として保持する（ポイント計算はマイルストーンを使用）。
+  const size = String(
+    configuredCustomFieldValue_(issue, 'issueSize') || ''
+  );
+
   const emergency = toBoolean_(
     configuredCustomFieldValue_(issue, 'emergencyFlag')
   );
