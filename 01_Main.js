@@ -10,13 +10,20 @@ function doGet(e) {
   if (params.code || params.error) return handleGoogleIdentityCallback_(params);
   const page = /^[a-z]+$/.test(String(params.page || '')) ? String(params.page) : 'dashboard';
   const month = /^\d{4}-\d{2}$/.test(String(params.month || '')) ? String(params.month) : '';
+  return renderApplicationHtml_(page, month, Boolean(params.page || params.month));
+}
+
+/** 指定された初期ページを埋め込み、通常アクセスと認証完了後で共通のアプリHTMLを返す。 */
+function renderApplicationHtml_(page, month, directRoute) {
+  const safePage = /^[a-z]+$/.test(String(page || '')) ? String(page) : 'dashboard';
+  const safeMonth = /^\d{4}-\d{2}$/.test(String(month || '')) ? String(month) : '';
   const template = HtmlService.createTemplateFromFile('Index');
   template.initialRouteJson = JSON.stringify({
-    page: page,
-    month: month,
-    explicit: Boolean(params.page || params.month)
+    page: safePage,
+    month: safeMonth,
+    explicit: Boolean(directRoute)
   }).replace(/</g, '\\u003c');
-  template.initialRouteDirect = Boolean(params.page || params.month);
+  template.initialRouteDirect = Boolean(directRoute);
   return template.evaluate()
     .setTitle(CSEG_APP.NAME)
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');

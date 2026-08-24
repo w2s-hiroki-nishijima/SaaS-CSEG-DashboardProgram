@@ -87,6 +87,18 @@
         font-size: 13px
     }
 
+    /* Apps Scriptのiframeから安全にGoogleログインへ移動できるリンクをボタン風に表示する。 */
+    .identity-login-link {
+        display: inline-block;
+        text-decoration: none
+    }
+
+    .identity-login-link.disabled {
+        opacity: .55;
+        pointer-events: none;
+        cursor: default
+    }
+
     .brand-mark {
         width: 62px;
         height: 62px;

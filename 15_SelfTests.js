@@ -58,6 +58,12 @@ function runDomainSelfTests_() {
     equal(toBoolean_('FALSE'), false);
   });
 
+  test('Google認証用画面はiframe越しにlocationを直接操作しない', function() {
+    const html = renderApplicationHtml_('dashboard', '2026-08', true).getContent();
+    equal(html.indexOf('window.top.location'), -1, '禁止された画面遷移が残っています。');
+    equal(html.indexOf('target="_top"') >= 0, true, '安全な戻りリンクがありません。');
+  });
+
   const failed = results.filter(function(result) { return !result.ok; });
   return { ok: failed.length === 0, passed: results.length - failed.length, failed: failed.length, results: results };
 }

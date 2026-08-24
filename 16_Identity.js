@@ -92,10 +92,10 @@ function handleGoogleIdentityCallback_(params) {
     const state = parseSignedIdentityPayload_(params.state, 'google-oauth-state');
     const tokenResponse = exchangeGoogleIdentityCode_(params.code);
     const claims = verifyGoogleIdentityToken_(tokenResponse.id_token, state.nonce);
-    const user = linkGoogleIdentity_(claims);
+    linkGoogleIdentity_(claims);
     bindTemporaryIdentitySession_(claims.sub);
-    const returnUrl = identityReturnUrl_(state.page, state.month);
-    return identityRedirectHtml_(returnUrl, user.name);
+    // OAuthの戻り先でアプリ本体を直接描画し、iframe越しの画面遷移を発生させない。
+    return renderApplicationHtml_(state.page, state.month, true);
   } catch (error) {
     return identityErrorHtml_(error && error.message ? error.message : CSEG_ACCESS_DENIED_MESSAGE);
   }
@@ -385,26 +385,6 @@ function decodeIdentityJwtPayload_(idToken) {
 /** 本番WebアプリのURLをGoogle OAuthの戻り先として返す。 */
 function getGoogleIdentityRedirectUri_() {
   return String(ScriptApp.getService().getUrl() || '');
-}
-
-/** 元の画面条件を含む、ログイン完了後のWebアプリURLを作る。 */
-function identityReturnUrl_(page, month) {
-  const params = [];
-  if (page) params.push('page=' + encodeURIComponent(page));
-  if (month) params.push('month=' + encodeURIComponent(month));
-  return getGoogleIdentityRedirectUri_() + (params.length ? '?' + params.join('&') : '');
-}
-
-/** Googleログイン成功後にWebアプリへ戻す最小HTMLを生成する。 */
-function identityRedirectHtml_(returnUrl, userName) {
-  const safeUrl = JSON.stringify(String(returnUrl)).replace(/</g, '\\u003c');
-  const safeName = String(userName || '').replace(/[&<>"']/g, '');
-  return HtmlService.createHtmlOutput(
-    '<!doctype html><html lang="ja"><head><meta charset="utf-8"><base target="_top"></head>' +
-    '<body style="font-family:sans-serif;text-align:center;padding:48px">' +
-    '<p>' + safeName + ' さんとしてログインしました。画面へ戻ります...</p>' +
-    '<script>window.top.location.replace(' + safeUrl + ');<\/script></body></html>'
-  ).setTitle(CSEG_APP.NAME);
 }
 
 /** Googleログインに失敗した理由と再試行リンクを安全なHTMLで表示する。 */

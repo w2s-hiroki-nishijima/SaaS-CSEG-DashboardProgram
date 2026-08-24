@@ -167,36 +167,37 @@ async function logoutIdentity() {
 /** Googleログインの設定状態を確認し、ランディング画面へ本人確認ボタンを表示する。 */
 async function showGoogleIdentityLogin() {
   const box = $('#googleIdentityLogin');
+  const link = $('#googleIdentityLoginLink');
   try {
     const config = await publicRpc('getPublicIdentityConfig');
     state.identityConfigured = Boolean(config && config.configured);
     box.classList.remove('hidden');
-    const button = box.querySelector('button');
-    button.disabled = !state.identityConfigured;
+    link.classList.add('disabled');
+    link.setAttribute('aria-disabled', 'true');
+    link.removeAttribute('href');
     box.querySelector('p').textContent = state.identityConfigured
-      ? '登録済みのGoogleアカウントで本人確認してください。'
+      ? 'Googleログインを準備しています...'
       : 'Googleログイン設定が未完了です。管理者へ連絡してください。';
-  } catch (error) {
-    box.classList.remove('hidden');
-    box.querySelector('button').disabled = true;
-    box.querySelector('p').textContent = error.message;
-  }
-}
+    if (!state.identityConfigured) return;
 
-/** 元のページ・対象月をstateへ含め、Googleのアカウント選択画面へ移動する。 */
-async function startGoogleIdentityLogin() {
-  busy(true, 'Googleログインを開始しています...');
-  try {
+    // Apps Scriptのiframeは最上位画面の直接変更を拒否するため、
+    // 遷移先を先に生成し、ユーザーがtarget="_top"リンクを押して移動できる状態にする。
     const route = await getInitialRoute();
     const monthInput = $('#globalMonth');
     const url = await publicRpc('createGoogleIdentitySignInUrl', {
       page: state.boot ? state.page : (route.page || 'dashboard'),
       month: (monthInput && monthInput.value) || route.month || ''
     });
-    window.top.location.assign(url);
+    link.href = url;
+    link.classList.remove('disabled');
+    link.setAttribute('aria-disabled', 'false');
+    box.querySelector('p').textContent = '登録済みのGoogleアカウントで本人確認してください。';
   } catch (error) {
-    toast(error.message, true);
-    busy(false);
+    box.classList.remove('hidden');
+    link.classList.add('disabled');
+    link.setAttribute('aria-disabled', 'true');
+    link.removeAttribute('href');
+    box.querySelector('p').textContent = error.message;
   }
 }
 
