@@ -4,18 +4,18 @@ const _sheetMemo_ = {};
 const _rowsMemo_ = {};
 
 /**
- * 現在Webアプリへアクセスしている許可ユーザーの権限で対象ブックを開く。
- * 権限不足時は、どのブックと実行ユーザーを確認すべきか分かるエラーへ変換する。
+ * Webアプリをデプロイした運用アカウントの権限で対象ブックを開く。
+ * 権限不足時は、どのブックとデプロイ用アカウントを確認すべきか分かるエラーへ変換する。
  */
 function openSpreadsheetById_(spreadsheetId, label) {
   try {
     return SpreadsheetApp.openById(spreadsheetId);
   } catch (error) {
     const effectiveEmail = String(Session.getEffectiveUser().getEmail() || '').trim();
-    const executor = effectiveEmail ? '（実行ユーザー: ' + effectiveEmail + '）' : '';
+    const executor = effectiveEmail ? '（デプロイ用アカウント: ' + effectiveEmail + '）' : '';
     throw new Error(
       String(label || 'スプレッドシート') + 'へアクセスできません' + executor +
-      '。現在ログインしているGoogleアカウントに対象シートの閲覧・編集権限があるか確認してください。'
+      '。デプロイ用アカウントに対象シートの閲覧・編集権限があるか確認してください。'
     );
   }
 }
@@ -30,8 +30,8 @@ function normalizeAuthorizedEmails_(values) {
 }
 
 /**
- * 設定タブの有効メンバーを許可リストへ保存し、必要な3ブックの編集者へ追加する。
- * 削除されたユーザーはアプリへ入れなくなるが、既存のシート共有権限は安全のため自動削除しない。
+ * 設定タブの有効メンバーを、Webアプリへ入場できるメールアドレス一覧として保存する。
+ * データアクセスはデプロイ用アカウントが担当するため、一般利用者へ元シートは共有しない。
  */
 function syncAuthorizedAccessFromMembers_() {
   const members = readRows_('Members').filter(function(member) {
@@ -39,21 +39,12 @@ function syncAuthorizedAccessFromMembers_() {
   });
   const memberEmails = normalizeAuthorizedEmails_(members.map(function(member) { return member.email; }));
   const cfg = getRuntimeConfig_();
-  const editorEmails = normalizeAuthorizedEmails_(memberEmails.concat(cfg.adminEmails));
-  if (!editorEmails.length) throw new Error('設定タブに有効なメールアドレスを1件以上登録してください。');
-
-  const spreadsheets = [
-    getDataSpreadsheet_(),
-    openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック'),
-    openSpreadsheetById_(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID, '月別アサイン活用報告ブック')
-  ];
-  spreadsheets.forEach(function(spreadsheet) {
-    spreadsheet.addEditors(editorEmails);
-  });
+  const allowedEmails = normalizeAuthorizedEmails_(memberEmails.concat(cfg.adminEmails));
+  if (!allowedEmails.length) throw new Error('設定タブに有効なメールアドレスを1件以上登録してください。');
 
   PropertiesService.getScriptProperties().setProperty('AUTHORIZED_EMAILS', memberEmails.join(','));
   clearRuntimeConfigMemo_();
-  return { memberEmails: memberEmails, editorEmails: editorEmails };
+  return { memberEmails: memberEmails, allowedEmails: allowedEmails };
 }
 
 /** Script Propertiesで指定されたアプリデータブックを開き、実行中は再利用する。 */

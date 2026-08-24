@@ -12,7 +12,7 @@
     "https://www.googleapis.com/auth/script.send_mail"
   ],
   "webapp": {
-    "executeAs": "USER_ACCESSING",
+    "executeAs": "USER_DEPLOYING",
     "access": "ANYONE"
   }
 }
