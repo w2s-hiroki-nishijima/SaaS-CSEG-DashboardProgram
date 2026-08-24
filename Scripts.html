@@ -23,9 +23,10 @@ const rpc = (name, ...args) =>
   new Promise((resolve, reject) =>
     google.script.run
       .withSuccessHandler(resolve)
-      .withFailureHandler(e =>
-        reject(new Error(e && e.message ? e.message : String(e)))
-      )[name](...args)
+      .withFailureHandler(e => {
+        const message = e && e.message ? e.message : String(e);
+        reject(new Error(message.replace(/^(?:Error|Exception):\s*/, '')));
+      })[name](...args)
   );
 
 // 画面へ埋め込む値をHTMLエスケープし、任意文字列の実行を防ぐ。
@@ -1081,10 +1082,6 @@ function renderSettings(s) {
       `<div class="panel-body">` +
         `<div class="form-grid">` +
           `<div class="field">` +
-            `<label>許可ドメイン</label>` +
-            `<input id="sDomain" value="${esc(s.allowedDomain)}">` +
-          `</div>` +
-          `<div class="field">` +
             `<label>管理者Googleグループ</label>` +
             `<input id="sAdminGroup" value="${esc(s.adminGroupEmail)}">` +
           `</div>` +
@@ -1126,7 +1123,7 @@ function renderSettings(s) {
       `<div class="panel-head">` +
         `<div>` +
           `<div class="panel-title">メンバーとGoogleアカウント</div>` +
-          `<div class="panel-sub">${esc(s.month)} の所属チームを <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
+          `<div class="panel-sub">メールを登録した有効メンバーだけが閲覧できます。${esc(s.month)} の所属チームは <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
         `</div>` +
         `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
       `</div>` +
@@ -1179,7 +1176,7 @@ function renderSettings(s) {
         `</div>` +
         `<div class="stat-line">` +
           `<span>アクセス方式</span>` +
-          `<strong>W2ドメイン限定 / デプロイした管理者として実行</strong>` +
+          `<strong>設定済みメール限定 / アクセスユーザーとして実行</strong>` +
         `</div>` +
       `</div>` +
     `</section>`
@@ -1189,7 +1186,6 @@ function renderSettings(s) {
 /** 設定画面の環境値をScript Propertiesへ保存する。 */
 async function saveSettings() {
   const input = {
-    allowedDomain: $('#sDomain').value,
     adminGroupEmail: $('#sAdminGroup').value,
     adminEmails: $('#sAdmins').value,
     backlogSpaceUrl: $('#sSpace').value,

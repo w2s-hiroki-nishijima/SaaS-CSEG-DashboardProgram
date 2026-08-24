@@ -3,7 +3,6 @@ const CSEG_APP = Object.freeze({
   NAME: 'CSEG Dashboard',
   VERSION: '3.0.0',
   TIMEZONE: 'Asia/Tokyo',
-  ALLOWED_DOMAIN: 'w2solution.co.jp',
   DEFAULT_DATA_SPREADSHEET_ID: '1nWxKowOvJeOzz1HFzyhieTvcapMn3UXl5ZDTcWyYRiY',
   MONTHLY_TEAM_SPREADSHEET_ID: '1yOf-LKzT45AhEZ_Tz-8SGQSIRW44nrbhWcMVYTTi4cU',
   ASSIGNMENT_SPREADSHEET_ID: '1Dy6dgPXH7Jnrhssa4TdgJ62ASMwaUC6gHW2xiW5-cEI',
@@ -239,7 +238,9 @@ function getRuntimeConfig_() {
   const props = PropertiesService.getScriptProperties();
   _runtimeConfigMemo_ = {
     dataSpreadsheetId: props.getProperty('DATA_SPREADSHEET_ID') || CSEG_APP.DEFAULT_DATA_SPREADSHEET_ID,
-    allowedDomain: props.getProperty('ALLOWED_DOMAIN') || CSEG_APP.ALLOWED_DOMAIN,
+    authorizedEmails: splitCsv_(props.getProperty('AUTHORIZED_EMAILS')).map(function(email) {
+      return email.toLowerCase();
+    }),
     adminEmails: splitCsv_(props.getProperty('ADMIN_EMAILS')),
     adminGroupEmail: props.getProperty('ADMIN_GROUP_EMAIL') || '',
     backlogSpaceUrl: String(props.getProperty('BACKLOG_SPACE_URL') || '').replace(/\/$/, ''),

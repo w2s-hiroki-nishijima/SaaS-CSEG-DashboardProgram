@@ -240,10 +240,14 @@ class MemberApplicationService {
       if (!name) throw new DomainValidationError('メンバー名を入力してください。');
       const skill = String(input.skillLevel || '');
       const experience = String(input.experienceLevel || '');
+      const email = String(input.email || '').trim().toLowerCase();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new DomainValidationError(name + 'のメールアドレス形式が不正です。');
+      }
       return {
         memberId: input.memberId || 'member_' + idFactory(),
         name: name,
-        email: String(input.email || '').trim().toLowerCase(),
+        email: email,
         team: String(input.team || ''),
         skillLevel: skill,
         experienceLevel: experience,

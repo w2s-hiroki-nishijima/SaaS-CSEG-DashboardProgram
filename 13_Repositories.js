@@ -104,6 +104,7 @@ class MemberRepository {
   /** メンバーIDをキーにメンバーマスタを保存する。 */
   save(rows) {
     upsertRows_('Members', rows, ['memberId']);
+    syncAuthorizedAccessFromMembers_();
   }
 
   /** 指定月の所属チームを外部月別ブックへ保存する。 */
@@ -149,7 +150,6 @@ class SettingsRepository {
   /** 画面入力を環境設定へ反映し、設定変更日時を履歴へ記録する。 */
   saveRuntimeConfig(input, actor) {
     const props = PropertiesService.getScriptProperties();
-    if (input.allowedDomain) props.setProperty('ALLOWED_DOMAIN', String(input.allowedDomain).trim().toLowerCase());
     props.setProperty('ADMIN_EMAILS', String(input.adminEmails || '').trim().toLowerCase());
     props.setProperty('ADMIN_GROUP_EMAIL', String(input.adminGroupEmail || '').trim().toLowerCase());
     props.setProperty('BACKLOG_SPACE_URL', String(input.backlogSpaceUrl || '').trim().replace(/\/$/, ''));
@@ -158,6 +158,7 @@ class SettingsRepository {
     if (String(input.slackWebhookUrl || '').trim()) props.setProperty('SLACK_WEBHOOK_URL', String(input.slackWebhookUrl).trim());
     if (input.termStartDate) props.setProperty('TERM_START_DATE', dateKey_(input.termStartDate));
     clearRuntimeConfigMemo_();
+    syncAuthorizedAccessFromMembers_();
     appendRows_('Settings', [{
       key: 'LAST_SETTINGS_UPDATE',
       value: nowIso_(),

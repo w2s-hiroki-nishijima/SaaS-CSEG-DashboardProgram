@@ -3,11 +3,10 @@
 function setupApplication() {
   const props = PropertiesService.getScriptProperties();
   const email = getActiveEmail_();
-  if (!email) throw new Error('W2アカウントでApps Scriptを開いて実行してください。');
+  if (!email) throw new Error('GoogleアカウントでApps Scriptを開いて実行してください。');
   if (!props.getProperty('DATA_SPREADSHEET_ID') && CSEG_APP.DEFAULT_DATA_SPREADSHEET_ID.indexOf('__') !== 0) {
     props.setProperty('DATA_SPREADSHEET_ID', CSEG_APP.DEFAULT_DATA_SPREADSHEET_ID);
   }
-  if (!props.getProperty('ALLOWED_DOMAIN')) props.setProperty('ALLOWED_DOMAIN', CSEG_APP.ALLOWED_DOMAIN);
   const admins = splitCsv_(props.getProperty('ADMIN_EMAILS')).map(function(v) { return v.toLowerCase(); });
   if (admins.indexOf(email) < 0) admins.push(email);
   props.setProperty('ADMIN_EMAILS', admins.join(','));
@@ -18,6 +17,7 @@ function setupApplication() {
   });
   linkPrimaryAdminMember_(email);
   seedDefaults_();
+  syncAuthorizedAccessFromMembers_();
   installTriggers_();
   scheduleAnalyticsRebuild_();
   return { ok: true, adminEmail: email, dataSpreadsheetId: getRuntimeConfig_().dataSpreadsheetId, analyticsCacheScheduled: true };

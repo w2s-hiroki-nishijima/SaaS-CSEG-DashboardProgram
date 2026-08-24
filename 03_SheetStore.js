@@ -4,7 +4,7 @@ const _sheetMemo_ = {};
 const _rowsMemo_ = {};
 
 /**
- * Webアプリをデプロイしたユーザーの権限で対象ブックを開く。
+ * 現在Webアプリへアクセスしている許可ユーザーの権限で対象ブックを開く。
  * 権限不足時は、どのブックと実行ユーザーを確認すべきか分かるエラーへ変換する。
  */
 function openSpreadsheetById_(spreadsheetId, label) {
@@ -15,9 +15,45 @@ function openSpreadsheetById_(spreadsheetId, label) {
     const executor = effectiveEmail ? '（実行ユーザー: ' + effectiveEmail + '）' : '';
     throw new Error(
       String(label || 'スプレッドシート') + 'へアクセスできません' + executor +
-      '。Webアプリのデプロイユーザーに対象シートの閲覧・編集権限があるか確認してください。'
+      '。現在ログインしているGoogleアカウントに対象シートの閲覧・編集権限があるか確認してください。'
     );
   }
+}
+
+/** メール一覧を小文字へ統一し、空欄・不正形式・重複を取り除く。 */
+function normalizeAuthorizedEmails_(values) {
+  return unique_((values || []).map(function(value) {
+    return String(value || '').trim().toLowerCase();
+  }).filter(function(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }));
+}
+
+/**
+ * 設定タブの有効メンバーを許可リストへ保存し、必要な3ブックの編集者へ追加する。
+ * 削除されたユーザーはアプリへ入れなくなるが、既存のシート共有権限は安全のため自動削除しない。
+ */
+function syncAuthorizedAccessFromMembers_() {
+  const members = readRows_('Members').filter(function(member) {
+    return toBoolean_(member.active) && String(member.email || '').trim();
+  });
+  const memberEmails = normalizeAuthorizedEmails_(members.map(function(member) { return member.email; }));
+  const cfg = getRuntimeConfig_();
+  const editorEmails = normalizeAuthorizedEmails_(memberEmails.concat(cfg.adminEmails));
+  if (!editorEmails.length) throw new Error('設定タブに有効なメールアドレスを1件以上登録してください。');
+
+  const spreadsheets = [
+    getDataSpreadsheet_(),
+    openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック'),
+    openSpreadsheetById_(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID, '月別アサイン活用報告ブック')
+  ];
+  spreadsheets.forEach(function(spreadsheet) {
+    spreadsheet.addEditors(editorEmails);
+  });
+
+  PropertiesService.getScriptProperties().setProperty('AUTHORIZED_EMAILS', memberEmails.join(','));
+  clearRuntimeConfigMemo_();
+  return { memberEmails: memberEmails, editorEmails: editorEmails };
 }
 
 /** Script Propertiesで指定されたアプリデータブックを開き、実行中は再利用する。 */

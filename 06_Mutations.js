@@ -1,21 +1,21 @@
 /** 画面から呼ばれる更新系RPCとして認証を行い、Application Serviceへ処理を委譲する。 */
 /** 改善要望・不具合報告を新規登録する。 */
 function submitFeedbackReport(input) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   getApplicationServices_().feedback.submit(input, user);
   return { ok: true, view: buildFeedbackData_(user) };
 }
 
 /** 既存の改善要望・不具合報告へコメントを追加する。 */
 function addFeedbackComment(input) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   getApplicationServices_().feedback.comment(input, user);
   return { ok: true, view: buildFeedbackData_(user) };
 }
 
 /** 改善要望・不具合報告のステータスを変更する。 */
 function updateFeedbackStatus(input) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   getApplicationServices_().feedback.changeStatus(input, user);
   return { ok: true, view: buildFeedbackData_(user) };
 }

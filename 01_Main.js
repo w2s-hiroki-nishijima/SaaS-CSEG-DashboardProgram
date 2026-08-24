@@ -23,13 +23,13 @@ function doGet(e) {
 
 /** ログインユーザーとナビゲーション定義を含む起動情報を返す。 */
 function getBootstrapData() {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   return buildBootstrapData_(user);
 }
 
 /** 権限を確認して初期ページを決定し、起動情報と最初の画面データをまとめて返す。 */
 function getInitialView(page, month) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   const boot = buildBootstrapData_(user);
   const allowedPages = boot.pages.filter(function(item) {
     return !item.admin || user.isAdmin;
@@ -78,13 +78,13 @@ function buildBootstrapData_(user) {
 
 /** 指定月のダッシュボード表示データを返す公開RPC。 */
 function getDashboardView(month) {
-  assertDomainUser_();
+  assertAuthorizedUser_();
   return buildDashboardData_(monthKey_(month));
 }
 
 /** 画面遷移を高速化するため、指定月の主要ページを一括で先読みする。 */
 function getNavigationPrefetchData(month) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   const targetMonth = monthKey_(month);
   const pages = {
     performance: buildPerformanceData_(targetMonth),
@@ -102,13 +102,13 @@ function getNavigationPrefetchData(month) {
 
 /** 指定月のメンバー別実績一覧を返す公開RPC。 */
 function getPerformanceView(month) {
-  assertDomainUser_();
+  assertAuthorizedUser_();
   return buildPerformanceData_(monthKey_(month));
 }
 
 /** 指定メンバーのチケット明細を索引優先で取得し、画面用形式で返す。 */
 function getPerformanceMemberIssues(month, memberName) {
-  assertDomainUser_();
+  assertAuthorizedUser_();
   const targetMonth = monthKey_(month);
   const name = String(memberName || '').trim();
   if (!name) throw new Error('メンバー名が指定されていません。');
@@ -190,19 +190,19 @@ function readPerformanceIssuesFromBacklog_(month, memberName) {
 
 /** スキルマスタとメンバー別スコアを返す公開RPC。 */
 function getSkillView() {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   return getApplicationServices_().skill.getView(user);
 }
 
 /** 指定月の予定・実績アサインを返す公開RPC。 */
 function getAssignmentView(month) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   return buildAssignmentData_(monthKey_(month), user);
 }
 
 /** 改善要望・不具合報告とコメント一覧を返す公開RPC。 */
 function getFeedbackView() {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   return buildFeedbackData_(user);
 }
 
@@ -237,7 +237,6 @@ function buildSettingsView_(month) {
   return {
     month: targetMonth,
     monthlyTeamSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
-    allowedDomain: cfg.allowedDomain,
     adminEmails: cfg.adminEmails.join(', '),
     adminGroupEmail: cfg.adminGroupEmail,
     backlogSpaceUrl: cfg.backlogSpaceUrl,

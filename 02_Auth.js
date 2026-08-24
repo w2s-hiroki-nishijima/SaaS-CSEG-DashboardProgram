@@ -1,18 +1,22 @@
-/** Google Workspaceドメイン、管理者、本人更新のアクセス制御を行う。 */
+/** 設定済みメールアドレス、管理者、本人更新のアクセス制御を行う。 */
+const CSEG_ACCESS_DENIED_MESSAGE = '閲覧権限がありません。管理者へ連絡お願いします';
 /** 現在Webアプリを操作しているGoogleアカウントのメールアドレスを取得する。 */
 function getActiveEmail_() {
   return String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
 }
 
-/** 許可ドメインの利用者であることを検証し、画面用ユーザー情報を返す。 */
-function assertDomainUser_() {
+/** 設定タブの有効メンバーまたは管理者メールに登録されていることを検証する。 */
+function assertAuthorizedUser_() {
   const email = getActiveEmail_();
   const cfg = getRuntimeConfig_();
-  if (!email) {
-    throw new Error('Googleアカウントを確認できません。W2アカウントでログインし、ウェブアプリの公開範囲がW2ドメイン内になっていることを確認してください。');
+  const authorizedEmails = unique_(cfg.authorizedEmails.concat(cfg.adminEmails));
+  const isAdmin = email ? isAdminEmail_(email) : false;
+  if (!email || (authorizedEmails.indexOf(email) < 0 && !isAdmin)) {
+    throw new Error(CSEG_ACCESS_DENIED_MESSAGE);
   }
-  if (cfg.allowedDomain && !email.endsWith('@' + cfg.allowedDomain.toLowerCase())) {
-    throw new Error('このアプリはW2ドメインのユーザーのみ利用できます。');
+  const props = PropertiesService.getScriptProperties();
+  if (isAdmin && props.getProperty('AUTHORIZED_EMAILS') === null) {
+    syncAuthorizedAccessFromMembers_();
   }
   const member = findMemberByEmail_(email);
   return {
@@ -20,13 +24,13 @@ function assertDomainUser_() {
     name: member ? member.name : email.split('@')[0],
     memberId: member ? member.memberId : '',
     team: member ? member.team : '',
-    isAdmin: isAdminEmail_(email)
+    isAdmin: isAdmin
   };
 }
 
 /** 現在の利用者が管理者であることを検証する。 */
 function assertAdmin_() {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   if (!user.isAdmin) throw new Error('管理者権限が必要です。');
   return user;
 }
@@ -63,7 +67,7 @@ function findMemberByEmail_(email) {
 
 /** 対象メンバー本人または管理者だけが更新できることを検証する。 */
 function assertMemberWrite_(memberId) {
-  const user = assertDomainUser_();
+  const user = assertAuthorizedUser_();
   if (user.isAdmin) return user;
   if (!user.memberId) throw new Error('設定画面でメンバーとメールアドレスを紐付けてください。');
   if (String(user.memberId) !== String(memberId)) throw new Error('自分以外のデータは更新できません。');
