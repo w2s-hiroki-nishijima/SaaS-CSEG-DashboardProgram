@@ -7,8 +7,13 @@ function getActiveEmail_() {
 
 /** 設定タブの有効メンバーまたは管理者メールに登録されていることを検証する。 */
 function assertAuthorizedUser_() {
-  const email = getActiveEmail_();
   const cfg = getRuntimeConfig_();
+  if (cfg.googleIdentityClientId && cfg.googleIdentityClientSecret) {
+    const identityUser = authenticateTemporaryIdentitySession_();
+    if (identityUser) return identityUser;
+    throw new Error(CSEG_ACCESS_DENIED_MESSAGE);
+  }
+  const email = getActiveEmail_();
   const authorizedEmails = unique_(cfg.authorizedEmails.concat(cfg.adminEmails));
   const isAdmin = email ? isAdminEmail_(email) : false;
   if (!email || (authorizedEmails.indexOf(email) < 0 && !isAdmin)) {

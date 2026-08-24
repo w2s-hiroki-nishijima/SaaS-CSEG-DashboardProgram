@@ -7,6 +7,7 @@ function include(filename) {
 /** URLパラメータから初期ページと対象月を決め、WebアプリのHTMLを返す。 */
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
+  if (params.code || params.error) return handleGoogleIdentityCallback_(params);
   const page = /^[a-z]+$/.test(String(params.page || '')) ? String(params.page) : 'dashboard';
   const month = /^\d{4}-\d{2}$/.test(String(params.month || '')) ? String(params.month) : '';
   const template = HtmlService.createTemplateFromFile('Index');
@@ -234,11 +235,18 @@ function getSettingsView(month) {
 function buildSettingsView_(month) {
   const cfg = getRuntimeConfig_();
   const targetMonth = monthKey_(month);
+  const linkedMemberIds = {};
+  readRows_('IdentityBindings').forEach(function(binding) {
+    if (toBoolean_(binding.active) && binding.memberId) linkedMemberIds[String(binding.memberId)] = true;
+  });
   return {
     month: targetMonth,
     monthlyTeamSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
     adminEmails: cfg.adminEmails.join(', '),
     adminGroupEmail: cfg.adminGroupEmail,
+    googleIdentityClientId: cfg.googleIdentityClientId,
+    googleIdentityClientSecretConfigured: Boolean(cfg.googleIdentityClientSecret),
+    googleIdentityRedirectUri: getGoogleIdentityRedirectUri_(),
     backlogSpaceUrl: cfg.backlogSpaceUrl,
     backlogProjectKeys: cfg.backlogProjectKeys.join(', '),
     backlogApiKeyConfigured: Boolean(cfg.backlogApiKey),
@@ -247,6 +255,10 @@ function buildSettingsView_(month) {
     dataSpreadsheetId: cfg.dataSpreadsheetId,
     lastSyncAt: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_AT') || '',
     lastSyncStatus: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_STATUS') || '',
-    members: getMembersForMonth_(targetMonth)
+    members: getMembersForMonth_(targetMonth).map(function(member) {
+      const row = Object.assign({}, member);
+      row.googleIdentityLinked = Boolean(linkedMemberIds[String(member.memberId)]);
+      return row;
+    })
   };
 }

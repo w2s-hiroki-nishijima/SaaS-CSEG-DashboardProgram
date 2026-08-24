@@ -17,6 +17,10 @@
       <h1>CSEG Dashboard</h1>
       <p class="landing-copy">チームの実績・目標・スキル・アサインをひとつに。</p>
       <button class="primary large" onclick="enterDashboard()">ダッシュボードへ <span>→</span></button>
+      <div id="googleIdentityLogin" class="identity-login hidden">
+        <p>登録済みのGoogleアカウントで本人確認してください。</p>
+        <button class="secondary" onclick="startGoogleIdentityLogin()">Googleアカウントでログイン</button>
+      </div>
       <p class="security-note">設定済みGoogleアカウント限定</p>
     </div>
   </section>
@@ -25,7 +29,7 @@
     <aside class="sidebar">
       <div class="side-brand"><div class="brand-mark small">C</div><div><strong>CSEG</strong><span>Dashboard</span></div></div>
       <nav id="nav"></nav>
-      <div class="side-bottom"><div id="userBadge" class="user-badge"></div><button id="feedbackNav" class="ghost feedback-nav" onclick="openPage('feedback')">! 改善要望・不具合報告</button><button class="ghost" onclick="showLanding()">TOPへ戻る</button></div>
+      <div class="side-bottom"><div id="userBadge" class="user-badge"></div><button id="feedbackNav" class="ghost feedback-nav" onclick="openPage('feedback')">! 改善要望・不具合報告</button><button class="ghost" onclick="showLanding()">TOPへ戻る</button><button class="ghost" onclick="logoutIdentity()">ログアウト</button></div>
     </aside>
     <main class="main">
       <header class="topbar">
@@ -35,7 +39,9 @@
       <div id="content" class="content"></div>
     </main>
   </div>
-  <script>window.__INITIAL_ROUTE__ = <?!= initialRouteJson ?>;</script>
+  <script>
+    window.__INITIAL_ROUTE__ = <?!= initialRouteJson ?>;
+  </script>
   <?!= include('Scripts'); ?>
   <?!= include('PageCache'); ?>
 </body>

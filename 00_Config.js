@@ -1,7 +1,7 @@
 /** CSEG Dashboard全体で共有する設定値、シート構成、値変換処理を定義する。 */
 const CSEG_APP = Object.freeze({
   NAME: 'CSEG Dashboard',
-  VERSION: '3.0.0',
+  VERSION: '3.1.0',
   TIMEZONE: 'Asia/Tokyo',
   DEFAULT_DATA_SPREADSHEET_ID: '1nWxKowOvJeOzz1HFzyhieTvcapMn3UXl5ZDTcWyYRiY',
   MONTHLY_TEAM_SPREADSHEET_ID: '1yOf-LKzT45AhEZ_Tz-8SGQSIRW44nrbhWcMVYTTi4cU',
@@ -176,7 +176,9 @@ const CSEG_SHEETS = Object.freeze({
   PerformanceIssues: ['month', 'memberName', 'sourceTeam', 'issueKey', 'summary', 'milestone', 'point', 'emergencyFlag', 'tatBusinessDays', 'url'],
   PerformanceIssueIndex: ['indexKey', 'month', 'memberName', 'startRow', 'rowCount', 'updatedAt'],
   FeedbackReports: ['reportId', 'type', 'title', 'description', 'status', 'createdAt', 'createdByEmail', 'createdByName', 'updatedAt', 'updatedBy'],
-  FeedbackComments: ['commentId', 'reportId', 'comment', 'createdAt', 'createdByEmail', 'createdByName']
+  FeedbackComments: ['commentId', 'reportId', 'comment', 'createdAt', 'createdByEmail', 'createdByName'],
+  IdentityBindings: ['googleSubject', 'memberId', 'emailAtLink', 'currentEmail', 'linkedAt', 'lastLoginAt', 'active'],
+  IdentitySessions: ['sessionKeyHash', 'googleSubject', 'expiresAt', 'createdAt', 'active']
 });
 
 const CSEG_SHEET_HEADERS = Object.freeze({
@@ -243,6 +245,8 @@ function getRuntimeConfig_() {
     }),
     adminEmails: splitCsv_(props.getProperty('ADMIN_EMAILS')),
     adminGroupEmail: props.getProperty('ADMIN_GROUP_EMAIL') || '',
+    googleIdentityClientId: props.getProperty('GOOGLE_IDENTITY_CLIENT_ID') || '',
+    googleIdentityClientSecret: props.getProperty('GOOGLE_IDENTITY_CLIENT_SECRET') || '',
     backlogSpaceUrl: String(props.getProperty('BACKLOG_SPACE_URL') || '').replace(/\/$/, ''),
     backlogApiKey: props.getProperty('BACKLOG_API_KEY') || '',
     backlogProjectKeys: splitCsv_(props.getProperty('BACKLOG_PROJECT_KEYS')),

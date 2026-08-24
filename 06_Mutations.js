@@ -78,6 +78,13 @@ function saveMembers(inputRows) {
   return { ok: true };
 }
 
+/** 管理者が対象メンバーの固定Google ID連携を解除し、次回ログイン時に再連携できるようにする。 */
+function resetMemberGoogleIdentity(memberId) {
+  assertAdmin_();
+  resetGoogleIdentityBindingForMember_(memberId);
+  return { ok: true };
+}
+
 /** 時間入力を0以上の数値に制限する共通検証処理。 */
 function nonNegative_(value) {
   const n = toNumber_(value, 0);

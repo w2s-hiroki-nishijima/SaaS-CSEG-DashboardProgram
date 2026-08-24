@@ -8,6 +8,7 @@ const state = {
   initialRoute: window.__INITIAL_ROUTE__ || null,
   restoringHistory: false,
   entering: false,
+  identityConfigured: null,
   feedbackFilter: 'open',
   lastServerView: null
 };
@@ -18,8 +19,8 @@ const $ = s => document.querySelector(s);
 // CSSセレクターに一致する全要素を配列として取得する短縮関数。
 const $$ = s => Array.from(document.querySelectorAll(s));
 
-// google.script.runをPromise化し、async/awaitでサーバーRPCを呼べるようにする。
-const rpc = (name, ...args) =>
+// 未認証でも利用できるGoogleログイン開始・完了処理をPromiseとして呼び出す。
+const publicRpc = (name, ...args) =>
   new Promise((resolve, reject) =>
     google.script.run
       .withSuccessHandler(resolve)
@@ -28,6 +29,9 @@ const rpc = (name, ...args) =>
         reject(new Error(message.replace(/^(?:Error|Exception):\s*/, '')));
       })[name](...args)
   );
+
+// 画面から許可済みの業務RPCだけを共通ディスパッチャー経由で呼び出す。
+const rpc = (name, ...args) => publicRpc('callClientApi', name, args);
 
 // 画面へ埋め込む値をHTMLエスケープし、任意文字列の実行を防ぐ。
 const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({
@@ -128,13 +132,72 @@ async function enterDashboard() {
     updateRoute('replace');
     result = initial;
   } catch (e) {
-    toast(e.message, true);
+    if (String(e.message || '').includes('閲覧権限がありません')) {
+      await showGoogleIdentityLogin();
+      toast('Googleアカウントで本人確認してください', true);
+    } else {
+      toast(e.message, true);
+    }
     showLanding();
   } finally {
     state.entering = false;
     busy(false);
   }
   return result;
+}
+
+/** 共有端末に認証情報を残さないようセッションを削除し、Googleログイン画面へ戻す。 */
+async function logoutIdentity() {
+  busy(true, 'ログアウトしています...');
+  try {
+    await rpc('logoutGoogleIdentity');
+    state.boot = null;
+    state.cache = {};
+    $('#app').classList.add('hidden');
+    $('#landing').classList.remove('hidden');
+    await showGoogleIdentityLogin();
+    toast('ログアウトしました');
+  } catch (error) {
+    toast(error.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+/** Googleログインの設定状態を確認し、ランディング画面へ本人確認ボタンを表示する。 */
+async function showGoogleIdentityLogin() {
+  const box = $('#googleIdentityLogin');
+  try {
+    const config = await publicRpc('getPublicIdentityConfig');
+    state.identityConfigured = Boolean(config && config.configured);
+    box.classList.remove('hidden');
+    const button = box.querySelector('button');
+    button.disabled = !state.identityConfigured;
+    box.querySelector('p').textContent = state.identityConfigured
+      ? '登録済みのGoogleアカウントで本人確認してください。'
+      : 'Googleログイン設定が未完了です。管理者へ連絡してください。';
+  } catch (error) {
+    box.classList.remove('hidden');
+    box.querySelector('button').disabled = true;
+    box.querySelector('p').textContent = error.message;
+  }
+}
+
+/** 元のページ・対象月をstateへ含め、Googleのアカウント選択画面へ移動する。 */
+async function startGoogleIdentityLogin() {
+  busy(true, 'Googleログインを開始しています...');
+  try {
+    const route = await getInitialRoute();
+    const monthInput = $('#globalMonth');
+    const url = await publicRpc('createGoogleIdentitySignInUrl', {
+      page: state.boot ? state.page : (route.page || 'dashboard'),
+      month: (monthInput && monthInput.value) || route.month || ''
+    });
+    window.top.location.assign(url);
+  } catch (error) {
+    toast(error.message, true);
+    busy(false);
+  }
 }
 
 /** アプリ本体を隠し、ランディング画面へ戻す。 */
@@ -1089,6 +1152,18 @@ function renderSettings(s) {
             `<label>管理者メール（カンマ区切り）</label>` +
             `<input id="sAdmins" value="${esc(s.adminEmails)}">` +
           `</div>` +
+          `<div class="field full">` +
+            `<label>Googleログイン クライアントID</label>` +
+            `<input id="sIdentityClientId" value="${esc(s.googleIdentityClientId)}" placeholder="1234567890-xxxx.apps.googleusercontent.com">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>Googleログイン クライアントシークレット</label>` +
+            `<input id="sIdentityClientSecret" type="password" placeholder="${s.googleIdentityClientSecretConfigured ? '変更する場合のみ入力' : '入力してください'}">` +
+          `</div>` +
+          `<div class="field">` +
+            `<label>承認済みリダイレクトURI</label>` +
+            `<input value="${esc(s.googleIdentityRedirectUri)}" disabled>` +
+          `</div>` +
           `<div class="field">` +
             `<label>BacklogスペースURL</label>` +
             `<input id="sSpace" value="${esc(s.backlogSpaceUrl)}" placeholder="https://example.backlog.jp">` +
@@ -1123,7 +1198,7 @@ function renderSettings(s) {
       `<div class="panel-head">` +
         `<div>` +
           `<div class="panel-title">メンバーとGoogleアカウント</div>` +
-          `<div class="panel-sub">メールを登録した有効メンバーだけが閲覧できます。${esc(s.month)} の所属チームは <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
+          `<div class="panel-sub">初回ログイン時に設定メールと照合し、以後はGoogleアカウントの固定IDで識別します。${esc(s.month)} の所属チームは <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
         `</div>` +
         `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
       `</div>` +
@@ -1135,6 +1210,7 @@ function renderSettings(s) {
               `<th>メール</th>` +
               `<th>チーム</th>` +
               `<th>権限</th>` +
+              `<th>Google認証</th>` +
             `</tr>` +
           `</thead>` +
           `<tbody>` +
@@ -1154,6 +1230,11 @@ function renderSettings(s) {
                     `<option value="member" ${m.role !== 'admin' ? 'selected' : ''}>メンバー</option>` +
                     `<option value="admin" ${m.role === 'admin' ? 'selected' : ''}>管理者</option>` +
                   `</select>` +
+                `</td>` +
+                `<td>` +
+                  (m.googleIdentityLinked
+                    ? `<span class="badge green">連携済み</span> <button class="ghost compact" onclick="resetGoogleIdentity('${esc(m.memberId)}')">再設定</button>`
+                    : `<span class="badge">未連携</span>`) +
                 `</td>` +
               `</tr>`
             )).join('')}` +
@@ -1176,7 +1257,7 @@ function renderSettings(s) {
         `</div>` +
         `<div class="stat-line">` +
           `<span>アクセス方式</span>` +
-          `<strong>設定済みメール限定 / デプロイ用アカウントとして実行</strong>` +
+          `<strong>固定Google ID認証 / デプロイ用アカウントとして実行</strong>` +
         `</div>` +
       `</div>` +
     `</section>`
@@ -1188,6 +1269,8 @@ async function saveSettings() {
   const input = {
     adminGroupEmail: $('#sAdminGroup').value,
     adminEmails: $('#sAdmins').value,
+    googleIdentityClientId: $('#sIdentityClientId').value,
+    googleIdentityClientSecret: $('#sIdentityClientSecret').value,
     backlogSpaceUrl: $('#sSpace').value,
     backlogProjectKeys: $('#sProjects').value,
     backlogApiKey: $('#sApiKey').value,
@@ -1197,10 +1280,33 @@ async function saveSettings() {
   busy(true, '設定を保存しています...');
   try {
     await rpc('saveAppSettings', input);
+    const identityEnabled = Boolean(input.googleIdentityClientId &&
+      (input.googleIdentityClientSecret || state.cache.settings.googleIdentityClientSecretConfigured));
+    if (identityEnabled) {
+      showLanding();
+      await showGoogleIdentityLogin();
+      toast('設定を保存しました。Googleアカウントでログインしてください');
+      return;
+    }
     toast('設定を保存しました');
     await reloadCurrentPage();
   } catch (e) {
     toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+/** 対象メンバーの固定Google ID連携を解除し、次回ログインで再連携させる。 */
+async function resetGoogleIdentity(memberId) {
+  if (!window.confirm('このメンバーのGoogle認証連携を再設定しますか？')) return;
+  busy(true, 'Google認証連携を解除しています...');
+  try {
+    await rpc('resetMemberGoogleIdentity', memberId);
+    toast('Google認証連携を解除しました');
+    await reloadCurrentPage();
+  } catch (error) {
+    toast(error.message, true);
   } finally {
     busy(false);
   }

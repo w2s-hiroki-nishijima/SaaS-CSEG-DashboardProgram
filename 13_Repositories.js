@@ -152,6 +152,10 @@ class SettingsRepository {
     const props = PropertiesService.getScriptProperties();
     props.setProperty('ADMIN_EMAILS', String(input.adminEmails || '').trim().toLowerCase());
     props.setProperty('ADMIN_GROUP_EMAIL', String(input.adminGroupEmail || '').trim().toLowerCase());
+    props.setProperty('GOOGLE_IDENTITY_CLIENT_ID', String(input.googleIdentityClientId || '').trim());
+    if (String(input.googleIdentityClientSecret || '').trim()) {
+      props.setProperty('GOOGLE_IDENTITY_CLIENT_SECRET', String(input.googleIdentityClientSecret).trim());
+    }
     props.setProperty('BACKLOG_SPACE_URL', String(input.backlogSpaceUrl || '').trim().replace(/\/$/, ''));
     props.setProperty('BACKLOG_PROJECT_KEYS', String(input.backlogProjectKeys || '').trim());
     if (String(input.backlogApiKey || '').trim()) props.setProperty('BACKLOG_API_KEY', String(input.backlogApiKey).trim());
