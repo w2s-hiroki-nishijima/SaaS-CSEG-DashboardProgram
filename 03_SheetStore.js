@@ -3,12 +3,29 @@ let _dataSpreadsheetMemo_ = null;
 const _sheetMemo_ = {};
 const _rowsMemo_ = {};
 
+/**
+ * Webアプリをデプロイしたユーザーの権限で対象ブックを開く。
+ * 権限不足時は、どのブックと実行ユーザーを確認すべきか分かるエラーへ変換する。
+ */
+function openSpreadsheetById_(spreadsheetId, label) {
+  try {
+    return SpreadsheetApp.openById(spreadsheetId);
+  } catch (error) {
+    const effectiveEmail = String(Session.getEffectiveUser().getEmail() || '').trim();
+    const executor = effectiveEmail ? '（実行ユーザー: ' + effectiveEmail + '）' : '';
+    throw new Error(
+      String(label || 'スプレッドシート') + 'へアクセスできません' + executor +
+      '。Webアプリのデプロイユーザーに対象シートの閲覧・編集権限があるか確認してください。'
+    );
+  }
+}
+
 /** Script Propertiesで指定されたアプリデータブックを開き、実行中は再利用する。 */
 function getDataSpreadsheet_() {
   if (_dataSpreadsheetMemo_) return _dataSpreadsheetMemo_;
   const id = getRuntimeConfig_().dataSpreadsheetId;
   if (!id || id.indexOf('__') === 0) throw new Error('DATA_SPREADSHEET_ID が設定されていません。');
-  _dataSpreadsheetMemo_ = SpreadsheetApp.openById(id);
+  _dataSpreadsheetMemo_ = openSpreadsheetById_(id, 'アプリデータブック');
   return _dataSpreadsheetMemo_;
 }
 
@@ -163,7 +180,7 @@ function monthlyTeamSheetName_(month) {
 /** 月別所属・目標ブックから対象月タブを取得する。 */
 function getMonthlyTeamSheet_(month) {
   const sheetName = monthlyTeamSheetName_(month);
-  const sheet = SpreadsheetApp.openById(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID).getSheetByName(sheetName);
+  const sheet = openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック').getSheetByName(sheetName);
   if (!sheet) throw new Error(sheetName + ' の所属チームシートが見つかりません。元シートに月別タブを作成してください。');
   return sheet;
 }
@@ -243,7 +260,7 @@ function monthlyAssignmentSheetName_(month) {
 /** アサイン活用報告ブックから対象月タブを取得する。 */
 function getMonthlyAssignmentSheet_(month) {
   const sheetName = monthlyAssignmentSheetName_(month);
-  const sheet = SpreadsheetApp.openById(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID).getSheetByName(sheetName);
+  const sheet = openSpreadsheetById_(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID, '月別アサイン活用報告ブック').getSheetByName(sheetName);
   if (!sheet) throw new Error(sheetName + ' がアサイン活用報告シートに見つかりません。');
   return sheet;
 }
