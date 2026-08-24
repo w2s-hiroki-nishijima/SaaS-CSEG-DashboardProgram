@@ -1,11 +1,11 @@
-/** CSEG Dashboard configuration and storage schema. */
+/** CSEG Dashboard全体で共有する設定値、シート構成、値変換処理を定義する。 */
 const CSEG_APP = Object.freeze({
   NAME: 'CSEG Dashboard',
   VERSION: '3.0.0',
   TIMEZONE: 'Asia/Tokyo',
   ALLOWED_DOMAIN: 'w2solution.co.jp',
   DEFAULT_DATA_SPREADSHEET_ID: '1nWxKowOvJeOzz1HFzyhieTvcapMn3UXl5ZDTcWyYRiY',
-  MONTHLY_TEAM_SPREADSHEET_ID: '1vS10vT-clLJFskKrNNox4pE8ROtwnaFoIm5MDThnkv4',
+  MONTHLY_TEAM_SPREADSHEET_ID: '1yOf-LKzT45AhEZ_Tz-8SGQSIRW44nrbhWcMVYTTi4cU',
   ASSIGNMENT_SPREADSHEET_ID: '1Dy6dgPXH7Jnrhssa4TdgJ62ASMwaUC6gHW2xiW5-cEI',
   DEFAULT_ADMIN_MEMBER_NAME: '西島弘騎',
   CLOSED_STATUS_NAMES: ['完了', '処理済み', 'Closed', 'Done', 'Resolved'],
@@ -226,12 +226,14 @@ const CSEG_SHEET_HEADERS = Object.freeze({
   ]
 });
 
+/** 指定したシートの表示用見出しを返し、未定義の場合は内部列名を使用する。 */
 function sheetHeaderLabels_(sheetName) {
   return CSEG_SHEET_HEADERS[sheetName] || CSEG_SHEETS[sheetName];
 }
 
 let _runtimeConfigMemo_ = null;
 
+/** Script Propertiesを読み込み、実行環境ごとの設定をキャッシュして返す。 */
 function getRuntimeConfig_() {
   if (_runtimeConfigMemo_) return _runtimeConfigMemo_;
   const props = PropertiesService.getScriptProperties();
@@ -249,24 +251,29 @@ function getRuntimeConfig_() {
   return _runtimeConfigMemo_;
 }
 
+/** 設定保存後に実行時設定のメモ化を破棄し、次回読み込みへ反映させる。 */
 function clearRuntimeConfigMemo_() {
   _runtimeConfigMemo_ = null;
 }
 
+/** カンマ区切りの設定値を、空要素を除いた文字列配列へ変換する。 */
 function splitCsv_(value) {
   return String(value || '').split(',').map(function(v) { return v.trim(); }).filter(Boolean);
 }
 
+/** アプリのタイムゾーンで現在日時をISO形式の文字列として返す。 */
 function nowIso_() {
   return Utilities.formatDate(new Date(), CSEG_APP.TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
 }
 
+/** 日付値を集計キー用のyyyy-MM-dd形式へ正規化する。 */
 function dateKey_(value) {
   if (!value) return '';
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? '' : Utilities.formatDate(d, CSEG_APP.TIMEZONE, 'yyyy-MM-dd');
 }
 
+/** 月の入力値をyyyy-MM形式へ正規化し、未指定時は当月を返す。 */
 function monthKey_(value) {
   if (!value) return Utilities.formatDate(new Date(), CSEG_APP.TIMEZONE, 'yyyy-MM');
   if (/^\d{4}-\d{2}$/.test(String(value))) return String(value);
@@ -275,18 +282,20 @@ function monthKey_(value) {
   return Utilities.formatDate(d, CSEG_APP.TIMEZONE, 'yyyy-MM');
 }
 
+/** 入力値を有限数へ変換し、変換できない場合は指定された既定値を返す。 */
 function toNumber_(value, fallback) {
   const n = Number(value);
   return isFinite(n) ? n : (fallback == null ? 0 : fallback);
 }
 
+/** 空欄を維持したまま、値がある場合だけ有限数へ変換する。 */
 function optionalNumber_(value) {
   if (value == null || value === '') return '';
   const n = Number(value);
   return isFinite(n) ? n : '';
 }
 
-/** Resolves the response point from a Backlog milestone such as SaaS:大(5h). */
+/** 「SaaS:大(5h)」のようなBacklogマイルストーンから評価ポイントを判定する。 */
 function milestonePoint_(value) {
   const milestone = String(value || '').trim();
   if (!milestone) return 1;
@@ -300,6 +309,7 @@ function milestonePoint_(value) {
   }, 0);
 }
 
+/** TRUE、〇、有などの表記揺れを吸収して真偽値へ変換する。 */
 function toBoolean_(value) {
   if (value === true || value === 1) return true;
   const normalized = String(value == null ? '' : value)

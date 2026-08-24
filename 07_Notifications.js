@@ -1,4 +1,5 @@
-/** Scheduled reminder engine. No rule is enabled by default. */
+/** 有効な通知ルールを定期評価し、条件を満たす通知を送信する。 */
+/** トリガー実行時に全通知ルールを評価し、必要なメッセージを配信する。 */
 function runNotificationJobs_() {
   const rules = readRows_('NotificationRules').filter(function(r) { return toBoolean_(r.enabled); });
   rules.forEach(function(rule) {
@@ -16,6 +17,7 @@ function runNotificationJobs_() {
   });
 }
 
+/** 通知ルールの実行周期と曜日から、現在実行すべきか判定する。 */
 function shouldRunRule_(rule) {
   const now = new Date();
   const today = dateKey_(now);
@@ -27,6 +29,7 @@ function shouldRunRule_(rule) {
   return true;
 }
 
+/** 通知種別に応じて対象データを集計し、送信本文を生成する。 */
 function buildNotificationMessage_(rule) {
   if (rule.type === 'overdue_tickets') {
     const overdue = getOverdueSnapshot_();
@@ -48,6 +51,7 @@ function buildNotificationMessage_(rule) {
   return '';
 }
 
+/** 通知ルールで指定されたメールまたはSlackへメッセージを送信する。 */
 function dispatchNotification_(rule, message) {
   if (rule.channel === 'none') return;
   if (rule.channel === 'email') {
@@ -63,6 +67,7 @@ function dispatchNotification_(rule, message) {
   }
 }
 
+/** 指定日が属する週の月曜日を返す。 */
 function getMonday_(date) {
   const d = new Date(date); const day = d.getDay();
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));

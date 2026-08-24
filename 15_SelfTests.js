@@ -1,9 +1,11 @@
 /**
- * Lightweight tests that can run in the Apps Script editor without changing
- * spreadsheets. Functions ending in an underscore are not exposed to the web UI.
+ * スプレッドシートを変更せず、Apps Scriptエディタから実行できる軽量テスト。
+ * 末尾がアンダースコアのためWeb画面からは直接公開されない。
  */
+/** 主要な業務ルールを順番に検証し、成功・失敗件数を返す。 */
 function runDomainSelfTests_() {
   const results = [];
+  // 1つのテストを実行し、例外を失敗結果として記録する。
   function test(name, body) {
     try {
       body();
@@ -12,6 +14,7 @@ function runDomainSelfTests_() {
       results.push({ name: name, ok: false, message: error.message });
     }
   }
+  // 実際値と期待値を厳密比較し、不一致なら分かりやすい例外を投げる。
   function equal(actual, expected, message) {
     if (actual !== expected) {
       throw new Error((message || '値が一致しません。') + ' expected=' + expected + ' actual=' + actual);

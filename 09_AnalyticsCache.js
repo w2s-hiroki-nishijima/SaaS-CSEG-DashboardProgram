@@ -1,8 +1,6 @@
 /**
- * Pre-aggregated analytics storage.
- *
- * BacklogIssues is intentionally read only while rebuilding this cache. Normal
- * dashboard/performance/aggregate requests read the small AnalyticsCache sheet.
+ * 集計済みデータをAnalyticsCacheへ保存し、通常画面がBacklogIssues全件を
+ * 毎回走査しなくて済むようにする。再構築中もBacklogIssuesは読取専用とする。
  */
 let _analyticsCacheMapMemo_ = null;
 let _performanceIssueRowsByKeyMemo_ = null;
@@ -13,6 +11,7 @@ const CSEG_ANALYTICS_REBUILD = Object.freeze({
   MAX_MILLIS: 3.5 * 60 * 1000
 });
 
+/** 管理者操作で集計キャッシュと明細を最初から再構築する公開RPC。 */
 function rebuildAnalyticsCache() {
   assertAdmin_();
   deleteAnalyticsRebuildTriggers_();
@@ -20,17 +19,19 @@ function rebuildAnalyticsCache() {
   return runAnalyticsCacheRebuild_(true, 'manual');
 }
 
-/** Rebuild aggregate metrics immediately after Backlog sync, preserving incrementally updated details. */
+/** Backlog同期後に変更分を反映する差分集計を開始する公開RPC。 */
 function rebuildAnalyticsCacheAfterBacklogSync() {
   assertAdmin_();
   deleteAnalyticsRebuildTriggers_();
   return runAnalyticsCacheRebuild_(true, 'post-sync');
 }
 
+/** 時間主導トリガーから保存済み状態を使って集計処理を再開する。 */
 function rebuildAnalyticsCache_() {
   return runAnalyticsCacheRebuild_(false, 'automatic');
 }
 
+/** 現在の集計進捗、継続状態、最終更新日時を画面へ返す。 */
 function getAnalyticsCacheStatus() {
   assertAdmin_();
   const props = PropertiesService.getScriptProperties();
@@ -41,6 +42,7 @@ function getAnalyticsCacheStatus() {
   };
 }
 
+/** 排他ロック内でBacklogIssuesを分割処理し、時間上限なら状態を保存して中断する。 */
 function runAnalyticsCacheRebuild_(restart, mode) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) return { ok: false, busy: true, message: '別の同期・集計処理が実行中です。' };
@@ -170,6 +172,7 @@ function runAnalyticsCacheRebuild_(restart, mode) {
   }
 }
 
+/** 再構築対象の範囲と進捗状態を初期化し、Script Propertiesへ保存する。 */
 function initializeAnalyticsRebuild_(mode) {
   const props = PropertiesService.getScriptProperties();
   const issueSheet = getSheet_('BacklogIssues');
@@ -199,7 +202,9 @@ function initializeAnalyticsRebuild_(mode) {
   return state;
 }
 
+/** BacklogIssuesの配列行を、集計に必要な型付き課題オブジェクトへ変換する。 */
 function analyticsIssueFromRow_(row, indexes) {
+  // 列名から対象セルを取り出し、列順への直接依存をこの関数内へ閉じ込める。
   function value(name) { return row[indexes[name]]; }
   const emergency = analyticsEmergencyFlag_(value('emergencyFlag'), value('customFieldsJson'));
   return {
@@ -222,6 +227,7 @@ function analyticsIssueFromRow_(row, indexes) {
   };
 }
 
+/** 保存済み列を優先し、必要ならカスタム属性JSONから緊急フラグを復元する。 */
 function analyticsEmergencyFlag_(storedValue, customFieldsJson) {
   if (toBoolean_(storedValue)) return true;
   try {
@@ -239,6 +245,7 @@ function analyticsEmergencyFlag_(storedValue, customFieldsJson) {
   }
 }
 
+/** 1課題の作成・完了・期限超過・ポイントを作業中の月次集計へ加算する。 */
 function applyIssueToAnalyticsWork_(work, issue, today) {
   const dueDate = String(issue.dueDate || '').slice(0, 10);
 
@@ -314,6 +321,7 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
   }
 }
 
+/** 複数主担当を展開し、1課題からメンバー別PerformanceIssues行を生成する。 */
 function buildPerformanceIssueRows_(issue) {
   const dueDate = String(issue.dueDate || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return [];
@@ -333,7 +341,7 @@ function buildPerformanceIssueRows_(issue) {
   return rows;
 }
 
-/** Replace only detail rows for issues returned by Backlog's updated-since query. */
+/** 変更された課題キーだけ明細を削除・再追加し、全件再生成を避ける。 */
 function updatePerformanceIssuesIncremental_(issues, targetIssueTypes) {
   if (!issues || !issues.length) return;
   targetIssueTypes = targetIssueTypes || getAnalyticsTargetIssueTypes_(getSheet_('BacklogIssues').getParent());
@@ -377,6 +385,7 @@ function updatePerformanceIssuesIncremental_(issues, targetIssueTypes) {
   clearSheetCache_('PerformanceIssues');
 }
 
+/** PerformanceIssuesの列番号をA1記法の列文字へ変換する。 */
 function performanceColumnLetter_(columnNumber) {
   let value = Number(columnNumber || 0);
   let result = '';
@@ -388,6 +397,7 @@ function performanceColumnLetter_(columnNumber) {
   return result;
 }
 
+/** 明細を月・メンバー順に並べ、開始行と件数の索引を再生成する。 */
 function finalizePerformanceIssueIndex_(updatedAt) {
   const sheet = getSheet_('PerformanceIssues');
   const headers = CSEG_SHEETS.PerformanceIssues;
@@ -435,6 +445,7 @@ function finalizePerformanceIssueIndex_(updatedAt) {
   _performanceIssueRowsByKeyMemo_ = null;
 }
 
+/** 中断前に保存した作業中集計をScript Propertiesから復元する。 */
 function loadAnalyticsWork_() {
   const work = { months: {}, overdue: { count: 0, byTeam: {}, tickets: [] } };
   readRows_('AnalyticsCache').forEach(function(row) {
@@ -447,6 +458,7 @@ function loadAnalyticsWork_() {
   return work;
 }
 
+/** 作業中集計と進捗状態を次回継続できる形で保存する。 */
 function persistAnalyticsWork_(work, state) {
   const updatedAt = nowIso_();
   const rows = Object.keys(work.months).sort().map(function(month) {
@@ -457,16 +469,19 @@ function persistAnalyticsWork_(work, state) {
   upsertRows_('AnalyticsCache', rows, ['cacheKey'], true);
 }
 
+/** 未完了の集計を再開する時間主導トリガーを登録する。 */
 function scheduleAnalyticsContinuation_() {
   ScriptApp.newTrigger('rebuildAnalyticsCache_').timeBased().after(60 * 1000).create();
 }
 
+/** 重複実行を防ぐため、既存の集計継続トリガーを削除する。 */
 function deleteAnalyticsRebuildTriggers_() {
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     if (trigger.getHandlerFunction() === 'rebuildAnalyticsCache_') ScriptApp.deleteTrigger(trigger);
   });
 }
 
+/** 指定月の集計格納先がなければ初期値を作成して返す。 */
 function ensureMonthBucket_(months, month) {
   if (!months[month]) {
     months[month] = {
@@ -487,6 +502,7 @@ function ensureMonthBucket_(months, month) {
   return months[month];
 }
 
+/** 完了課題を月全体・チーム・メンバーの各指標へ加算する。 */
 function addCompletedIssueToBucket_(
   bucket,
   issue,
@@ -540,6 +556,7 @@ function addCompletedIssueToBucket_(
   });
 }
 
+/** 指標Mapに対象キーの初期値がなければ作成して返す。 */
 function ensureIssueMetric_(map, name) {
   if (!map[name]) {
     map[name] = {
@@ -560,6 +577,7 @@ function ensureIssueMetric_(map, name) {
   return map[name];
 }
 
+/** 完了件数、ポイント、緊急、品質、TAT区分を1つの指標へ加算する。 */
 function addCompletedMetric_(
   metric,
   issue,
@@ -605,6 +623,7 @@ function addCompletedMetric_(
   }
 }
 
+/** AnalyticsCacheシートをキー検索用Mapとして読み込み、実行中は再利用する。 */
 function getAnalyticsCacheMap_() {
   if (_analyticsCacheMapMemo_) return _analyticsCacheMapMemo_;
   const rows = readRows_('AnalyticsCache');
@@ -621,11 +640,13 @@ function getAnalyticsCacheMap_() {
   return _analyticsCacheMapMemo_;
 }
 
+/** 指定月の集計スナップショットを取得し、存在しない場合は空データを返す。 */
 function getMonthlyIssueSnapshot_(month) {
   const map = getAnalyticsCacheMap_();
   return normalizeSnapshotTeams_(map['month:' + month] || ensureMonthBucket_({}, month));
 }
 
+/** 現在の期限超過スナップショットを取得する。 */
 function getOverdueSnapshot_() {
   const source = getAnalyticsCacheMap_().overdue || { count: 0, byTeam: {}, tickets: [] };
   return {
@@ -635,7 +656,7 @@ function getOverdueSnapshot_() {
   };
 }
 
-/** Keeps old cache rows compatible after team values became multi-select. */
+/** 旧形式と新形式のチーム集計を統一形式へ正規化する。 */
 function normalizeSnapshotTeams_(source) {
   const snapshot = Object.assign({}, source);
   snapshot.createdByTeam = normalizeTeamCountMap_(source.createdByTeam || {});
@@ -644,6 +665,7 @@ function normalizeSnapshotTeams_(source) {
   return snapshot;
 }
 
+/** 複数チーム表記を個別チームへ展開し、件数Mapを作り直す。 */
 function normalizeTeamCountMap_(source) {
   const out = {};
   Object.keys(source || {}).forEach(function(teamValue) {
@@ -656,6 +678,7 @@ function normalizeTeamCountMap_(source) {
   return out;
 }
 
+/** 複数チーム表記の指標を個別チームへそれぞれ加算する。 */
 function normalizeTeamMetricMap_(source) {
   const out = {};
   Object.keys(source || {}).forEach(function(teamValue) {
@@ -668,6 +691,7 @@ function normalizeTeamMetricMap_(source) {
   return out;
 }
 
+/** メンバー×複数チームの旧キーを個別チームのキーへ展開する。 */
 function normalizeMemberTeamMetricMap_(source) {
   const out = {};
   Object.keys(source || {}).forEach(function(key) {
@@ -682,6 +706,7 @@ function normalizeMemberTeamMetricMap_(source) {
   return out;
 }
 
+/** 指定キーの指標へ別指標の各数値を安全にマージする。 */
 function mergeIssueMetric_(map, key, source, name, team) {
   const target = ensureIssueMetric_(map, key);
   target.name = name;
@@ -694,6 +719,7 @@ function mergeIssueMetric_(map, key, source, name, team) {
   });
 }
 
+/** Backlog同期終了後に集計再構築を非同期で開始するトリガーを登録する。 */
 function scheduleAnalyticsRebuild_(rebuildPerformanceIssues) {
   const handler = 'rebuildAnalyticsCache_';
   const exists = ScriptApp.getProjectTriggers().some(function(trigger) {
@@ -707,6 +733,7 @@ function scheduleAnalyticsRebuild_(rebuildPerformanceIssues) {
   props.setProperty('ANALYTICS_CACHE_STATUS', 'pending');
 }
 
+/** 集計対象とするBacklog課題種別を設定シートから取得する。 */
 function getAnalyticsTargetIssueTypes_(spreadsheet) {
   const sheet = spreadsheet.getSheetByName('CSEG対象種別');
 
@@ -746,6 +773,7 @@ function getAnalyticsTargetIssueTypes_(spreadsheet) {
   return targetIssueTypes;
 }
 
+/** カンマ・改行などで連結された複数主担当を個別の氏名へ分割する。 */
 function splitCsegOwners_(value) {
   const owners = String(value || '')
     .split(/[,、，\n\r]+/)
@@ -760,6 +788,7 @@ function splitCsegOwners_(value) {
   return Array.from(new Set(owners));
 }
 
+/** カンマ・改行などで連結された複数チームを個別チームへ分割する。 */
 function splitCsegTeams_(value) {
   return splitCsegOwners_(value);
 }

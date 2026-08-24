@@ -1,4 +1,5 @@
 <script>
+// 画面全体で共有する現在ページ、起動情報、検索条件、直近取得データを保持する。
 const state = {
   boot: null,
   page: 'dashboard',
@@ -11,10 +12,13 @@ const state = {
   lastServerView: null
 };
 
+// CSSセレクターに一致する最初の要素を取得する短縮関数。
 const $ = s => document.querySelector(s);
 
+// CSSセレクターに一致する全要素を配列として取得する短縮関数。
 const $$ = s => Array.from(document.querySelectorAll(s));
 
+// google.script.runをPromise化し、async/awaitでサーバーRPCを呼べるようにする。
 const rpc = (name, ...args) =>
   new Promise((resolve, reject) =>
     google.script.run
@@ -24,6 +28,7 @@ const rpc = (name, ...args) =>
       )[name](...args)
   );
 
+// 画面へ埋め込む値をHTMLエスケープし、任意文字列の実行を防ぐ。
 const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({
   '&': '&amp;',
   '<': '&lt;',
@@ -32,12 +37,14 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({
   "'": '&#39;'
 }[m]));
 
+// 数値を指定小数桁の日本語表示へ整形する。
 const num = (v, d = 0) => Number(v || 0).toLocaleString('ja-JP', { minimumFractionDigits: d, maximumFractionDigits: d });
 
+// 0～1の比率をパーセント表示へ変換する。
 const pct = v => num(Number(v || 0) * 100, 0) + '%';
 
-// Client-side page registry. Add a page here and to buildBootstrapData_ instead
-// of extending several independent if/else chains.
+// ページごとの取得RPC、描画処理、月依存の有無を一元管理する。
+// 新規ページ追加時はサーバー側buildBootstrapData_とこの定義の両方へ登録する。
 const CLIENT_PAGES = Object.freeze({
   dashboard: { load: month => rpc('getDashboardView', month), render: renderDashboard },
   performance: { load: month => rpc('getPerformanceView', month), render: renderPerformance },
@@ -50,11 +57,13 @@ const CLIENT_PAGES = Object.freeze({
   feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
 });
 
+/** 全画面ローダーの表示状態とメッセージを切り替える。 */
 function busy(on, text = '処理中...') {
   $('#loaderText').textContent = text;
   $('#loader').classList.toggle('hidden', !on);
 }
 
+/** 成功・エラーメッセージを一定時間トースト表示する。 */
 function toast(msg, error = false) {
   const el = $('#toast');
   el.textContent = msg;
@@ -63,6 +72,7 @@ function toast(msg, error = false) {
   toast.t = setTimeout(() => el.className = 'toast', 3500);
 }
 
+/** Apps ScriptのURL情報からページIDと対象月を安全に取り出す。 */
 function routeFromLocation(location) {
   const parameter = location && location.parameter ? location.parameter : {};
   return {
@@ -72,6 +82,7 @@ function routeFromLocation(location) {
   };
 }
 
+/** テンプレート埋込み値または現在URLから初期ルートを取得する。 */
 function getInitialRoute() {
   if (state.initialRoute) return Promise.resolve(state.initialRoute);
   return new Promise(resolve => google.script.url.getLocation(location => {
@@ -80,6 +91,7 @@ function getInitialRoute() {
   }));
 }
 
+/** 現在ページと対象月をブラウザ履歴・URLパラメータへ反映する。 */
 function updateRoute(historyMode = 'push') {
   if (!state.boot || state.restoringHistory) return;
   const params = { page: state.page, month: $('#globalMonth').value || state.boot.currentMonth };
@@ -88,6 +100,7 @@ function updateRoute(historyMode = 'push') {
   else if (historyMode === 'push') google.script.history.push(historyState, params, '');
 }
 
+/** 利用者情報と初期ページを取得し、ランディング画面からアプリ本体へ切り替える。 */
 async function enterDashboard() {
   if (state.entering) return;
   let result = null;
@@ -123,12 +136,14 @@ async function enterDashboard() {
   return result;
 }
 
+/** アプリ本体を隠し、ランディング画面へ戻す。 */
 function showLanding() {
   document.body.classList.remove('direct-route');
   $('#app').classList.add('hidden');
   $('#landing').classList.remove('hidden');
 }
 
+/** 権限に応じたサイドバーナビゲーションを生成する。 */
 function buildNav() {
   const allowed = state.boot.pages.filter(p => p.id !== 'feedback' && (!p.admin || state.boot.user.isAdmin));
   $('#nav').innerHTML = allowed.map(p => (
@@ -140,11 +155,13 @@ function buildNav() {
   $$('.admin-only').forEach(el => el.classList.toggle('hidden', !state.boot.user.isAdmin));
 }
 
+/** ログインユーザー名、メール、管理者表示をサイドバーへ描画する。 */
 function renderUser() {
   const u = state.boot.user;
   $('#userBadge').innerHTML = `<strong>${esc(u.name)}</strong>${esc(u.email)}${u.isAdmin ? ' · 管理者' : ''}`;
 }
 
+/** ページ権限を確認し、URLを更新して対象ページのデータ取得・描画を行う。 */
 async function openPage(page, historyMode = 'push') {
   const allowed = state.boot.pages.some(p => p.id === page && (!p.admin || state.boot.user.isAdmin));
   if (!allowed) page = 'dashboard';
@@ -164,6 +181,7 @@ async function openPage(page, historyMode = 'push') {
   return data;
 }
 
+/** 選択ナビ、ページ名、月入力欄などページ共通UIを切り替える。 */
 function preparePageChrome(page) {
   $$('.nav-item').forEach(x => x.classList.toggle('active', x.dataset.page === page));
   $('#feedbackNav').classList.toggle('active', page === 'feedback');
@@ -174,15 +192,18 @@ function preparePageChrome(page) {
   $('#globalMonth').closest('label').classList.toggle('hidden', Boolean(definition && definition.monthIndependent));
 }
 
+/** 取得済みデータをページレジストリに対応する描画処理へ渡す。 */
 function renderInitialPage(page, data) {
   const definition = CLIENT_PAGES[page] || CLIENT_PAGES.dashboard;
   return definition.render(data);
 }
 
+/** 現在ページを再取得し、必要な場合だけ新しい履歴としてURLへ追加する。 */
 function reloadCurrentPage(pushHistory = false) {
   return openPage(state.page, pushHistory ? 'push' : 'none');
 }
 
+/** ページレジストリのRPCを実行し、取得結果を記録して描画する。 */
 async function renderPage(page) {
   const month = $('#globalMonth').value;
   const definition = CLIENT_PAGES[page] || CLIENT_PAGES.dashboard;
@@ -197,6 +218,7 @@ async function renderPage(page) {
   return data;
 }
 
+/** KPIカード1件分の共通HTMLを生成する。 */
 function kpi(label, value, sub, cls = '') {
   return (
     `<div class="kpi ${cls}">` +
@@ -207,6 +229,7 @@ function kpi(label, value, sub, cls = '') {
   );
 }
 
+/** 月次KPI、四半期進捗、日次推移、チーム実績、期限超過を描画する。 */
 function renderDashboard(d) {
   const k = d.kpis;
   const dailyMax = Math.max(1, ...d.daily.flatMap(x => [x.created, x.completed]));
@@ -315,6 +338,7 @@ function renderDashboard(d) {
   );
 }
 
+/** メンバー別実績一覧とチーム・氏名の絞り込みUIを描画する。 */
 function renderPerformance(d) {
   $('#content').innerHTML = (
     `<div class="toolbar">` +
@@ -377,6 +401,7 @@ function renderPerformance(d) {
   refreshPerformanceZebra();
 }
 
+/** チームとメンバー名で実績行を絞り込み、明細行と縞模様も同期する。 */
 function filterPerformance() {
   const team = $('#teamFilter').value,
     q = $('#memberSearch').value.toLowerCase();
@@ -389,6 +414,7 @@ function filterPerformance() {
   refreshPerformanceZebra();
 }
 
+/** 表示中のメンバーだけを数え直し、親行と明細行へ交互色を適用する。 */
 function refreshPerformanceZebra() {
   let visibleIndex = 0;
   $$('#performanceTable tbody .performance-member-row').forEach(memberRow => {
@@ -403,6 +429,7 @@ function refreshPerformanceZebra() {
   });
 }
 
+/** メンバー行の開閉状態を切り替え、初回だけチケット明細を取得して描画する。 */
 async function togglePerformanceDetails(button, event) {
   event.stopPropagation();
   const memberRow = button.closest('tr');
@@ -440,6 +467,7 @@ async function togglePerformanceDetails(button, event) {
   }
 }
 
+/** メンバー選択、スキルカード、合計ポイント、管理者用追加フォームを描画する。 */
 function renderSkills(d) {
   state.cache.skills = d;
   if (!state.skillMemberId)
@@ -498,6 +526,7 @@ function renderSkills(d) {
   updateSkillTotal();
 }
 
+/** スキル定義と現在スコアから1枚のスキル入力カードHTMLを生成する。 */
 function skillCard(s, score) {
   const lv = Number(score?.level || 0);
   return (
@@ -513,12 +542,14 @@ function skillCard(s, score) {
   );
 }
 
+/** 画面上の全スキルレベルから現在の合計ポイントを再計算する。 */
 function updateSkillTotal() {
   const d = state.cache.skills;
   const total = d.scores.filter(x => x.memberId === state.skillMemberId).reduce((a, x) => a + Number(x.points || 0), 0);
   $('#totalSkillScore').textContent = `合計 ${num(total)} pt`;
 }
 
+/** 選択メンバーのスキルレベルを保存し、合計ポイントを更新する。 */
 async function saveSkill(skillId, level) {
   busy(true, 'スキルを保存しています...');
   try {
@@ -537,6 +568,7 @@ async function saveSkill(skillId, level) {
   }
 }
 
+/** 管理者が入力した新しいスキル定義を保存して一覧を再読込する。 */
 async function addSkillMaster() {
   const input = {
     category: $('#skCategory').value,
@@ -560,6 +592,7 @@ async function addSkillMaster() {
   }
 }
 
+/** 月別の予定・実績アサイン一覧と本人用入力フォームを描画する。 */
 function renderAssignments(d) {
   state.cache.assignments = d;
   const own = d.user.memberId;
@@ -648,6 +681,7 @@ function renderAssignments(d) {
   loadAssignmentInputs();
 }
 
+/** 選択メンバーの現在実績を入力欄へ読み込む。 */
 function loadAssignmentInputs() {
   const select = $('#aMember');
   if (!select || !state.cache.assignments) return;
@@ -658,6 +692,7 @@ function loadAssignmentInputs() {
   $('#aSpecial').value = Number(row.specialHours || 0);
 }
 
+/** アサイン行を合計し、予定・実績・残時間のサマリーを生成する。 */
 function assignmentSummary(rows) {
   const total = rows.reduce((a, r) => a + Number(r.actualHours || 0), 0);
   const planned = rows.reduce((a, r) => a + Number(r.plannedHours || 0), 0);
@@ -675,6 +710,7 @@ function assignmentSummary(rows) {
   );
 }
 
+/** 指定日が属する週の月曜日をyyyy-MM-dd形式で返す。 */
 function getMondayKey(d) {
   const x = new Date(d),
     day = x.getDay();
@@ -682,6 +718,7 @@ function getMondayKey(d) {
   return x.toISOString().slice(0, 10);
 }
 
+/** 入力された対応・改善・特別対応時間を対象メンバーの実績として保存する。 */
 async function saveAssignment() {
   const input = {
     memberId: $('#aMember').value,
@@ -702,6 +739,7 @@ async function saveAssignment() {
   }
 }
 
+/** 左側へ投稿フォーム、右側へ報告一覧と絞り込みを描画する。 */
 function renderFeedback(d) {
   state.cache.feedback = d;
   const reports = d.reports.filter(report => {
@@ -737,6 +775,7 @@ function renderFeedback(d) {
   );
 }
 
+/** 報告本文、ステータス、コメント一覧・入力欄を1枚のカードとして生成する。 */
 function feedbackCard(report, statuses, index) {
   const comments = Array.isArray(report.comments) ? report.comments : [];
   return (
@@ -758,6 +797,7 @@ function feedbackCard(report, statuses, index) {
   );
 }
 
+/** 改善要望・不具合の入力を検証して投稿し、一覧を更新する。 */
 async function submitFeedback() {
   busy(true, '報告を投稿しています...');
   try {
@@ -776,6 +816,7 @@ async function submitFeedback() {
   }
 }
 
+/** 対象報告へ入力されたコメントを投稿し、一覧を更新する。 */
 async function postFeedbackComment(reportId) {
   const textarea = document.querySelector(`[data-comment-for="${reportId}"]`);
   busy(true, 'コメントを投稿しています...');
@@ -790,6 +831,7 @@ async function postFeedbackComment(reportId) {
   }
 }
 
+/** 対象報告のステータスを保存し、一覧の並びと表示を更新する。 */
 async function changeFeedbackStatus(reportId, status) {
   busy(true, 'ステータスを更新しています...');
   try {
@@ -803,6 +845,7 @@ async function changeFeedbackStatus(reportId, status) {
   }
 }
 
+/** 月別の所属、係数、アサイン時間、目標件数を参照専用一覧として描画する。 */
 function renderTargets(d) {
   state.cache.targets = d;
   $('#content').innerHTML = (
@@ -855,6 +898,7 @@ function renderTargets(d) {
   );
 }
 
+/** チーム別実績と全体合計を管理者向け集計画面へ描画する。 */
 function renderAggregate(d) {
   const t = d.totals;
   $('#content').innerHTML = (
@@ -917,6 +961,7 @@ function renderAggregate(d) {
   );
 }
 
+/** 通知ルール一覧と新規・編集フォームを管理者向けに描画する。 */
 function renderNotifications(d) {
   state.cache.notifications = d;
   $('#content').innerHTML = (
@@ -995,6 +1040,7 @@ function renderNotifications(d) {
   );
 }
 
+/** 通知ルール入力を保存し、通知センターを再読込する。 */
 async function saveNotification() {
   const input = {
     name: $('#nName').value,
@@ -1018,6 +1064,7 @@ async function saveNotification() {
   }
 }
 
+/** 接続設定、同期状態、月別メンバー設定を管理者向けに描画する。 */
 function renderSettings(s) {
   state.cache.settings = s;
   $('#content').innerHTML = (
@@ -1139,6 +1186,7 @@ function renderSettings(s) {
   );
 }
 
+/** 設定画面の環境値をScript Propertiesへ保存する。 */
 async function saveSettings() {
   const input = {
     allowedDomain: $('#sDomain').value,
@@ -1162,6 +1210,7 @@ async function saveSettings() {
   }
 }
 
+/** 画面上のメンバー行を収集し、対象月の所属とマスタ設定を保存する。 */
 async function saveMemberSettings() {
   const source = state.cache.settings.members;
   const rows = $$('#memberSettings tbody tr').map(tr => {
@@ -1186,6 +1235,7 @@ async function saveMemberSettings() {
   }
 }
 
+/** Backlog同期を開始し、完了後に実績キャッシュの差分再集計を実行する。 */
 async function manualSync() {
   busy(true, 'Backlogを同期しています...');
   try {
@@ -1207,6 +1257,7 @@ async function manualSync() {
   }
 }
 
+/** 戻る・進む操作のURLと履歴状態からページ・対象月を復元する。 */
 async function restoreRoute(location, historyState) {
   if (!state.boot) return;
   const route = routeFromLocation(location);
@@ -1221,6 +1272,7 @@ async function restoreRoute(location, historyState) {
   }
 }
 
+/** URL変更ハンドラーを登録し、直接リンクの場合は自動でアプリを起動する。 */
 function initializeRouting() {
   google.script.history.setChangeHandler(event => {
     restoreRoute(event.location, event.state).catch(error => toast(error.message, true));

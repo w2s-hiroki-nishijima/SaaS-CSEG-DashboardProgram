@@ -1,8 +1,10 @@
-/** Domain and administrator authorization. */
+/** Google Workspaceドメイン、管理者、本人更新のアクセス制御を行う。 */
+/** 現在Webアプリを操作しているGoogleアカウントのメールアドレスを取得する。 */
 function getActiveEmail_() {
   return String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
 }
 
+/** 許可ドメインの利用者であることを検証し、画面用ユーザー情報を返す。 */
 function assertDomainUser_() {
   const email = getActiveEmail_();
   const cfg = getRuntimeConfig_();
@@ -22,12 +24,14 @@ function assertDomainUser_() {
   };
 }
 
+/** 現在の利用者が管理者であることを検証する。 */
 function assertAdmin_() {
   const user = assertDomainUser_();
   if (!user.isAdmin) throw new Error('管理者権限が必要です。');
   return user;
 }
 
+/** メール設定、メンバーマスタ、Google Groupのいずれかから管理者かを判定する。 */
 function isAdminEmail_(email) {
   const cfg = getRuntimeConfig_();
   if (cfg.adminEmails.indexOf(String(email).toLowerCase()) >= 0) return true;
@@ -46,6 +50,7 @@ function isAdminEmail_(email) {
   }
 }
 
+/** メンバーマスタからメールアドレスが一致する有効メンバーを検索する。 */
 function findMemberByEmail_(email) {
   if (!email) return null;
   const key = String(email).toLowerCase();
@@ -56,6 +61,7 @@ function findMemberByEmail_(email) {
   return null;
 }
 
+/** 対象メンバー本人または管理者だけが更新できることを検証する。 */
 function assertMemberWrite_(memberId) {
   const user = assertDomainUser_();
   if (user.isAdmin) return user;

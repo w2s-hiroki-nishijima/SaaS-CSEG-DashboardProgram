@@ -1,8 +1,9 @@
-/** Google Sheets-backed data access. */
+/** アプリ内部シートと外部月別ブックの共通読書きを担当する。 */
 let _dataSpreadsheetMemo_ = null;
 const _sheetMemo_ = {};
 const _rowsMemo_ = {};
 
+/** Script Propertiesで指定されたアプリデータブックを開き、実行中は再利用する。 */
 function getDataSpreadsheet_() {
   if (_dataSpreadsheetMemo_) return _dataSpreadsheetMemo_;
   const id = getRuntimeConfig_().dataSpreadsheetId;
@@ -11,6 +12,7 @@ function getDataSpreadsheet_() {
   return _dataSpreadsheetMemo_;
 }
 
+/** スキーマ登録済みのシートを取得し、存在しなければ見出し付きで作成する。 */
 function getSheet_(sheetName) {
   if (!CSEG_SHEETS[sheetName]) throw new Error('不明なデータシートです: ' + sheetName);
   if (_sheetMemo_[sheetName]) return _sheetMemo_[sheetName];
@@ -25,6 +27,7 @@ function getSheet_(sheetName) {
   return sheet;
 }
 
+/** シート全行を内部列名のオブジェクト配列として読み、短時間キャッシュする。 */
 function readRows_(sheetName) {
   if (_rowsMemo_[sheetName]) return _rowsMemo_[sheetName];
   const cache = CacheService.getScriptCache();
@@ -60,6 +63,7 @@ function readRows_(sheetName) {
   return _rowsMemo_[sheetName];
 }
 
+/** 既存行を変更せず、指定したオブジェクト配列をシート末尾へ追加する。 */
 function appendRows_(sheetName, rows) {
   if (!rows || !rows.length) return;
   const sheet = getSheet_(sheetName);
@@ -71,6 +75,7 @@ function appendRows_(sheetName, rows) {
   clearSheetCache_(sheetName);
 }
 
+/** キー列が一致する行を更新し、存在しない行は追加する。 */
 function upsertRows_(sheetName, rows, keyFields, lockAlreadyHeld) {
   if (!rows || !rows.length) return { inserted: 0, updated: 0 };
   const lock = lockAlreadyHeld ? null : LockService.getScriptLock();
@@ -110,6 +115,7 @@ function upsertRows_(sheetName, rows, keyFields, lockAlreadyHeld) {
   }
 }
 
+/** 見出しを残してデータ行を全置換し、集計キャッシュなどの再生成に使用する。 */
 function replaceAllRows_(sheetName, rows) {
   const sheet = getSheet_(sheetName);
   const headers = CSEG_SHEETS[sheetName];
@@ -117,12 +123,14 @@ function replaceAllRows_(sheetName, rows) {
   appendRows_(sheetName, rows || []);
 }
 
+/** 指定シートの読取キャッシュだけを削除する。 */
 function clearSheetCache_(sheetName) {
   delete _rowsMemo_[sheetName];
   CacheService.getScriptCache().remove('rows:' + sheetName);
   CacheService.getScriptCache().remove('analytics:' + monthKey_());
 }
 
+/** 新規データシートへ見出し書式、フィルター、列幅を設定する。 */
 function formatDataSheet_(sheet, columnCount) {
   sheet.setFrozenRows(1);
   sheet.getRange(1, 1, 1, columnCount)
@@ -133,6 +141,7 @@ function formatDataSheet_(sheet, columnCount) {
   sheet.autoResizeColumns(1, Math.min(columnCount, 12));
 }
 
+/** 書込み予定の最終行まで不足している行数を追加する。 */
 function ensureSheetRowCapacity_(sheet, requiredLastRow) {
   const maxRows = sheet.getMaxRows();
   if (requiredLastRow > maxRows) {
@@ -140,16 +149,18 @@ function ensureSheetRowCapacity_(sheet, requiredLastRow) {
   }
 }
 
+/** アプリ内部の全シート読取キャッシュを一括削除する。 */
 function invalidateAllCaches_() {
   CacheService.getScriptCache().removeAll(Object.keys(CSEG_SHEETS).map(function(name) { return 'rows:' + name; }));
 }
 
-/** Returns the legacy monthly sheet title used by the team assignment workbook. */
+/** 対象月から「2026年8月」形式の月別シート名を生成する。 */
 function monthlyTeamSheetName_(month) {
   const key = monthKey_(month);
   return Number(key.slice(0, 4)) + '年' + Number(key.slice(5, 7)) + '月';
 }
 
+/** 月別所属・目標ブックから対象月タブを取得する。 */
 function getMonthlyTeamSheet_(month) {
   const sheetName = monthlyTeamSheetName_(month);
   const sheet = SpreadsheetApp.openById(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID).getSheetByName(sheetName);
@@ -157,7 +168,7 @@ function getMonthlyTeamSheet_(month) {
   return sheet;
 }
 
-/** Reads member name (A) and team (C) from the legacy monthly workbook. */
+/** 月別所属・目標ブックのA列から氏名、C列から所属チームを読み込む。 */
 function readMonthlyTeamMembership_(month) {
   const sheet = getMonthlyTeamSheet_(month);
   const lastRow = sheet.getLastRow();
@@ -169,7 +180,7 @@ function readMonthlyTeamMembership_(month) {
     .filter(function(row) { return row.name; });
 }
 
-/** Reads the selected month's target roster directly from the target workbook (A:H). */
+/** 月別所属・目標ブックのA～H列から対象月の目標スナップショットを読み込む。 */
 function readMonthlyTargetRows_(month) {
   const sheet = getMonthlyTeamSheet_(month);
   const lastRow = sheet.getLastRow();
@@ -207,7 +218,7 @@ function readMonthlyTargetRows_(month) {
   }).filter(Boolean);
 }
 
-/** Writes monthly inputs and the calculated target back to E:H as a fixed snapshot. */
+/** 月別の算定時間と計算済み目標をE～H列へ固定スナップショットとして保存する。 */
 function saveMonthlyTargetRows_(month, rows) {
   const sheet = getMonthlyTeamSheet_(month);
   const source = readMonthlyTargetRows_(month);
@@ -224,10 +235,12 @@ function saveMonthlyTargetRows_(month, rows) {
   });
 }
 
+/** 対象月からアサイン活用報告タブ名を生成する。 */
 function monthlyAssignmentSheetName_(month) {
   return monthlyTeamSheetName_(month) + 'アサイン活用報告';
 }
 
+/** アサイン活用報告ブックから対象月タブを取得する。 */
 function getMonthlyAssignmentSheet_(month) {
   const sheetName = monthlyAssignmentSheetName_(month);
   const sheet = SpreadsheetApp.openById(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID).getSheetByName(sheetName);
@@ -235,10 +248,12 @@ function getMonthlyAssignmentSheet_(month) {
   return sheet;
 }
 
+/** 空白表記を除去し、ブック間でメンバー名を照合するためのキーを作る。 */
 function assignmentMemberKey_(value) {
   return String(value || '').replace(/[\s\u3000]+/g, '').trim();
 }
 
+/** 対象月の予定・実績アサインを数式列を含めて読み込み、画面用の行へ変換する。 */
 function readMonthlyAssignmentRows_(month) {
   const sheet = getMonthlyAssignmentSheet_(month);
   const lastRow = sheet.getLastRow();
@@ -277,6 +292,7 @@ function readMonthlyAssignmentRows_(month) {
   }).filter(Boolean);
 }
 
+/** 対象メンバーの実績内訳B～D列と更新日時J列だけを保存する。 */
 function saveMonthlyAssignmentActual_(month, input) {
   const sheet = getMonthlyAssignmentSheet_(month);
   const current = readMonthlyAssignmentRows_(month).find(function(row) {
@@ -291,7 +307,7 @@ function saveMonthlyAssignmentActual_(month, input) {
   return current;
 }
 
-/** Applies the selected month's team to the app member master without changing the master itself. */
+/** メンバーマスタを変更せず、選択月の所属チームを重ねたメンバー一覧を返す。 */
 function getMembersForMonth_(month) {
   const members = readRows_('Members').filter(function(r) { return toBoolean_(r.active); });
   const byName = {};
@@ -303,7 +319,7 @@ function getMembersForMonth_(month) {
   });
 }
 
-/** Writes team values only to column C, preserving formulas and formatting in the legacy sheet. */
+/** 数式と書式を保ったまま、月別所属シートのC列だけを更新する。 */
 function saveMonthlyTeamMembership_(month, rows) {
   const sheet = getMonthlyTeamSheet_(month);
   const existing = readMonthlyTeamMembership_(month);

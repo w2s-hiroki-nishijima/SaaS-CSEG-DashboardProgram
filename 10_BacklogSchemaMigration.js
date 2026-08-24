@@ -1,5 +1,6 @@
-/** BacklogIssues v2 schema inspection and migration utilities. */
+/** BacklogIssuesの列構成を安全に調査・移行・検証する管理者向けツール群。 */
 
+/** Backlog APIからカスタム属性一覧を取得し、現在の名称とIDを調査する。 */
 function inspectBacklogCustomFields() {
   assertAdmin_();
   const cfg = getRuntimeConfig_();
@@ -45,6 +46,7 @@ function inspectBacklogCustomFields() {
   return projects;
 }
 
+/** ダッシュボード集計に必要なカスタム属性名の候補を重複なしで返す。 */
 function requiredBacklogCustomFieldNames_() {
   return [
     '【CS】案件タイプ',
@@ -62,6 +64,7 @@ function requiredBacklogCustomFieldNames_() {
   ];
 }
 
+/** 既存BacklogIssuesをバックアップし、新スキーマへ安全に移行する。 */
 function migrateBacklogIssuesSchemaV2() {
   assertAdmin_();
   const lock = LockService.getScriptLock();
@@ -111,6 +114,7 @@ function migrateBacklogIssuesSchemaV2() {
   }
 }
 
+/** スキーマ移行後にBacklog全件同期を開始する。 */
 function runFullBacklogSyncV2() {
   assertAdmin_();
   const sheet = getDataSpreadsheet_().getSheetByName('BacklogIssues');
@@ -133,6 +137,7 @@ function runFullBacklogSyncV2() {
   return startBacklogSync_('manual');
 }
 
+/** 列順、必須値、件数、サンプルを検査し、移行結果を報告する。 */
 function validateBacklogIssuesV2() {
   assertAdmin_();
   const sheet = getDataSpreadsheet_().getSheetByName('BacklogIssues');
@@ -200,6 +205,7 @@ function validateBacklogIssuesV2() {
   return result;
 }
 
+/** BacklogIssuesの現在の見出しが期待するスキーマと完全一致するか確認する。 */
 function backlogHeadersMatch_(sheet, expectedHeaders) {
   if (!sheet || sheet.getLastColumn() < expectedHeaders.length) return false;
   const actual = sheet.getRange(1, 1, 1, expectedHeaders.length).getDisplayValues()[0];
@@ -208,6 +214,7 @@ function backlogHeadersMatch_(sheet, expectedHeaders) {
   });
 }
 
+/** 既存タブ名と重複しないバックアップ用シート名を生成する。 */
 function uniqueBackupSheetName_(spreadsheet, baseName) {
   let name = baseName.slice(0, 99);
   let suffix = 2;
@@ -220,6 +227,7 @@ function uniqueBackupSheetName_(spreadsheet, baseName) {
   return name;
 }
 
+/** 必須カスタム属性だけを少量取得し、設定との対応状況を簡潔に確認する。 */
 function inspectRequiredBacklogFieldsCompact() {
   assertAdmin_();
 
@@ -360,6 +368,7 @@ function inspectRequiredBacklogFieldsCompact() {
   return results;
 }
 
+/** 全件同期の進捗、継続トリガー、最終ログを管理者へ返す。 */
 function getBacklogSyncProgressV2() {
   assertAdmin_();
 
@@ -484,6 +493,7 @@ function getBacklogSyncProgressV2() {
   };
 }
 
+/** 保存済み同期状態がある場合に全件同期を手動再開する。 */
 function resumeBacklogSyncV2() {
   assertAdmin_();
 

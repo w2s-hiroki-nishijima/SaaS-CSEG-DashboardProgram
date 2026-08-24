@@ -1,8 +1,10 @@
-/** Web application entry points and read-only RPC facade. */
+/** Webアプリの入口と、画面から呼ばれる読取系RPCの互換窓口を提供する。 */
+/** HTMLテンプレートから共通HTMLファイルを読み込む。 */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+/** URLパラメータから初期ページと対象月を決め、WebアプリのHTMLを返す。 */
 function doGet(e) {
   const params = e && e.parameter ? e.parameter : {};
   const page = /^[a-z]+$/.test(String(params.page || '')) ? String(params.page) : 'dashboard';
@@ -19,11 +21,13 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
+/** ログインユーザーとナビゲーション定義を含む起動情報を返す。 */
 function getBootstrapData() {
   const user = assertDomainUser_();
   return buildBootstrapData_(user);
 }
 
+/** 権限を確認して初期ページを決定し、起動情報と最初の画面データをまとめて返す。 */
 function getInitialView(page, month) {
   const user = assertDomainUser_();
   const boot = buildBootstrapData_(user);
@@ -42,10 +46,12 @@ function getInitialView(page, month) {
   };
 }
 
+/** ページIDに対応するQuery Serviceへ初期画面データの生成を委譲する。 */
 function buildInitialPageData_(page, month, user) {
   return getApplicationServices_().pages.get(page, month, user);
 }
 
+/** ユーザー権限、同期状態、ページ一覧から画面起動用ViewModelを組み立てる。 */
 function buildBootstrapData_(user) {
   const config = getRuntimeConfig_();
   const lastSync = PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_AT') || '';
@@ -70,11 +76,13 @@ function buildBootstrapData_(user) {
   };
 }
 
+/** 指定月のダッシュボード表示データを返す公開RPC。 */
 function getDashboardView(month) {
   assertDomainUser_();
   return buildDashboardData_(monthKey_(month));
 }
 
+/** 画面遷移を高速化するため、指定月の主要ページを一括で先読みする。 */
 function getNavigationPrefetchData(month) {
   const user = assertDomainUser_();
   const targetMonth = monthKey_(month);
@@ -92,11 +100,13 @@ function getNavigationPrefetchData(month) {
   return { month: targetMonth, pages: pages };
 }
 
+/** 指定月のメンバー別実績一覧を返す公開RPC。 */
 function getPerformanceView(month) {
   assertDomainUser_();
   return buildPerformanceData_(monthKey_(month));
 }
 
+/** 指定メンバーのチケット明細を索引優先で取得し、画面用形式で返す。 */
 function getPerformanceMemberIssues(month, memberName) {
   assertDomainUser_();
   const targetMonth = monthKey_(month);
@@ -117,6 +127,7 @@ function getPerformanceMemberIssues(month, memberName) {
   };
 }
 
+/** PerformanceIssuesの行を、日付・真偽値・数値を整えた画面用データへ変換する。 */
 function performanceIssueForClient_(row) {
   const out = {};
   CSEG_SHEETS.PerformanceIssues.forEach(function(header) {
@@ -130,6 +141,7 @@ function performanceIssueForClient_(row) {
   return out;
 }
 
+/** PerformanceIssueIndexの開始行と件数を使い、対象メンバーの明細だけを高速取得する。 */
 function readIndexedPerformanceIssues_(index, targetMonth, memberName) {
   const sheet = getSheet_('PerformanceIssues');
   const headers = CSEG_SHEETS.PerformanceIssues;
@@ -146,6 +158,7 @@ function readIndexedPerformanceIssues_(index, targetMonth, memberName) {
   });
 }
 
+/** 索引明細がない場合にBacklogIssuesから対象メンバーの明細を復元する。 */
 function readPerformanceIssuesFromBacklog_(month, memberName) {
   const sheet = getSheet_('BacklogIssues');
   const headers = CSEG_SHEETS.BacklogIssues;
@@ -175,41 +188,49 @@ function readPerformanceIssuesFromBacklog_(month, memberName) {
   return result;
 }
 
+/** スキルマスタとメンバー別スコアを返す公開RPC。 */
 function getSkillView() {
   const user = assertDomainUser_();
   return getApplicationServices_().skill.getView(user);
 }
 
+/** 指定月の予定・実績アサインを返す公開RPC。 */
 function getAssignmentView(month) {
   const user = assertDomainUser_();
   return buildAssignmentData_(monthKey_(month), user);
 }
 
+/** 改善要望・不具合報告とコメント一覧を返す公開RPC。 */
 function getFeedbackView() {
   const user = assertDomainUser_();
   return buildFeedbackData_(user);
 }
 
+/** 管理者向けに指定月のメンバー目標件数を返す公開RPC。 */
 function getTargetView(month) {
   assertAdmin_();
   return buildTargetData_(monthKey_(month));
 }
 
+/** 管理者向けに指定月のチーム集計を返す公開RPC。 */
 function getAggregateView(month) {
   assertAdmin_();
   return buildAggregateData_(monthKey_(month));
 }
 
+/** 管理者向けに通知ルール一覧を返す公開RPC。 */
 function getNotificationView() {
   assertAdmin_();
   return getApplicationServices_().notification.getView();
 }
 
+/** 管理者向けに設定値と指定月のメンバー情報を返す公開RPC。 */
 function getSettingsView(month) {
   assertAdmin_();
   return buildSettingsView_(monthKey_(month));
 }
 
+/** Script Propertiesと月別所属をまとめ、設定画面用ViewModelを生成する。 */
 function buildSettingsView_(month) {
   const cfg = getRuntimeConfig_();
   const targetMonth = monthKey_(month);

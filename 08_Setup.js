@@ -1,4 +1,5 @@
-/** One-time setup. Run setupApplication() from the Apps Script editor. */
+/** 初回導入時にシート、初期値、管理者、定期トリガーを設定する。 */
+/** Apps Scriptエディタから実行し、アプリを利用可能な初期状態へ整える。 */
 function setupApplication() {
   const props = PropertiesService.getScriptProperties();
   const email = getActiveEmail_();
@@ -22,6 +23,7 @@ function setupApplication() {
   return { ok: true, adminEmail: email, dataSpreadsheetId: getRuntimeConfig_().dataSpreadsheetId, analyticsCacheScheduled: true };
 }
 
+/** 既定管理者名のメンバーへ実行者メールと管理者権限を紐付ける。 */
 function linkPrimaryAdminMember_(email) {
   const members = readRows_('Members');
   let target = members.find(function(m) { return m.name === CSEG_APP.DEFAULT_ADMIN_MEMBER_NAME; });
@@ -32,6 +34,7 @@ function linkPrimaryAdminMember_(email) {
   upsertRows_('Members', [target], ['memberId']);
 }
 
+/** メンバー、目標係数、スキル、通知ルールの初期データを不足分だけ登録する。 */
 function seedDefaults_() {
   if (!readRows_('TargetCoefficients').length) {
     appendRows_('TargetCoefficients', [
@@ -60,6 +63,7 @@ function seedDefaults_() {
   }
 }
 
+/** 同期・通知などの既存重複トリガーを避けて定期トリガーを登録する。 */
 function installTriggers_() {
   const handlers = ['runHourlyBacklogSync_', 'runNotificationJobs_', 'continueBacklogSync_'];
   ScriptApp.getProjectTriggers().forEach(function(trigger) {

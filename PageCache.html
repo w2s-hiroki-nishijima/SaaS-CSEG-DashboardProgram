@@ -1,4 +1,5 @@
 <script>
+// 既存の画面遷移関数をラップし、初回取得後のページをメモリキャッシュから即時表示する。
 (function installPageCache() {
   const CACHE_TTL_MILLIS = 5 * 60 * 1000;
   const cache = {};
@@ -9,6 +10,7 @@
   const originalOpenPage = window.openPage;
   const originalReloadCurrentPage = window.reloadCurrentPage;
 
+  // ページIDと対象月からキャッシュキーを生成し、月非依存ページは共通キーにする。
   function cacheKey(page, month) {
     const definition = CLIENT_PAGES[page];
     const period = definition && definition.monthIndependent
@@ -18,6 +20,7 @@
     return page + ':' + period;
   }
 
+  // 画面データと保存時刻をキャッシュへ記録する。
   function saveCache(page, month, data) {
     cache[cacheKey(page, month)] = {
       data: data,
@@ -25,14 +28,17 @@
     };
   }
 
+  // ページ・対象月に一致するキャッシュを取得する。
   function readCache(page, month) {
     return cache[cacheKey(page, month)] || null;
   }
 
+  // 明示的な再読込前に対象ページのキャッシュだけを削除する。
   function deleteCache(page, month) {
     delete cache[cacheKey(page, month)];
   }
 
+  // サーバーから直近取得した画面データを重複保存せずキャッシュへ取り込む。
   function captureLastServerView() {
     const view = state.lastServerView;
     if (!view || view === lastCapturedView) return false;
@@ -41,15 +47,18 @@
     return true;
   }
 
+  // 指定月の主要ページを一括取得し、画面遷移前にキャッシュを温める。
   function prefetchPages(month) {
     if (prefetchRequests[month]) {
       return prefetchRequests[month];
     }
 
     prefetchRequests[month] = rpc('getNavigationPrefetchData', month)
+      // 先読み成功時に各ページを保存し、実行中リクエストの管理を解除する。
       .then(function handlePrefetchSuccess(result) {
         const pages = result.pages || {};
 
+        // 先読み結果をページ単位のキャッシュへ分割して保存する。
         Object.keys(pages).forEach(function savePage(page) {
           saveCache(page, result.month, pages[page]);
         });
@@ -57,6 +66,7 @@
         delete prefetchRequests[month];
         return result;
       })
+      // 先読み失敗は通常画面の操作を止めず、次回再試行できる状態へ戻す。
       .catch(function handlePrefetchFailure() {
         delete prefetchRequests[month];
         return null;
@@ -65,12 +75,14 @@
     return prefetchRequests[month];
   }
 
+  // 初期画面の取得結果を保存し、選択月の他ページをバックグラウンド取得する。
   window.enterDashboard = async function enterDashboardWithPrefetch() {
     const result = await originalEnterDashboard();
 
     if (state.boot) {
       captureLastServerView();
       const month = document.querySelector('#globalMonth').value || state.boot.currentMonth;
+      // 初期描画を優先し、描画後の非同期処理として先読みを開始する。
       window.setTimeout(function startPrefetch() {
         prefetchPages(month);
       }, 0);
@@ -78,6 +90,7 @@
     return result;
   };
 
+  // 有効なキャッシュがあれば通信・ローダーを通さず描画し、期限切れは裏側で更新する。
   window.openPage = async function openPageWithCache(page, historyMode = 'push') {
     const allowed = state.boot.pages.some(function(item) {
       return item.id === page && (!item.admin || state.boot.user.isAdmin);
@@ -89,6 +102,7 @@
     if (!cached) {
       const result = await originalOpenPage(page, historyMode);
       captureLastServerView();
+      // 初回取得したページを表示した後、同じ月の残りページを先読みする。
       window.setTimeout(function warmSelectedMonth() {
         prefetchPages(month);
       }, 0);
@@ -107,6 +121,7 @@
     return cached.data;
   };
 
+  // 現在ページのキャッシュを破棄してサーバーから最新データを取得し直す。
   window.reloadCurrentPage = function reloadPageWithoutCache(pushHistory = false) {
     const month = document.querySelector('#globalMonth').value;
     deleteCache(state.page, month);
@@ -114,9 +129,9 @@
     return originalReloadCurrentPage(pushHistory);
   };
 
-  // Direct URL startup can begin before this wrapper is installed. Poll only
-  // until the initial server response is available, then warm the selected month.
+  // 直接URL起動がラッパー登録より先に始まった場合に備え、初回応答まで短時間だけ確認する。
   let warmupAttempts = 0;
+  // 起動情報が揃った時点で初期画面を保存し、選択月の先読みを開始する。
   function warmInitialView() {
     if (state.boot && document.querySelector('#globalMonth').value) {
       captureLastServerView();

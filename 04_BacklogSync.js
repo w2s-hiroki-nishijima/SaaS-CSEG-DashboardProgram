@@ -1,4 +1,5 @@
-/** Backlog full/incremental synchronization. */
+/** Backlogの全件・差分同期、正規化、時間制限時の継続実行を担当する。 */
+/** 管理者操作から差分同期を開始し、同期状態を画面へ返す公開RPC。 */
 function manualBacklogSync() {
   assertAdmin_();
 
@@ -27,6 +28,7 @@ function manualBacklogSync() {
   );
 }
 
+/** 排他ロックを取得し、保存済み状態からBacklog同期本体を開始・再開する。 */
 function startBacklogSync_(mode) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(1000)) return { ok: false, message: '別の同期処理が実行中です。' };
@@ -128,6 +130,7 @@ function startBacklogSync_(mode) {
   }
 }
 
+/** Backlog APIから更新日時条件付きで課題を1ページ分取得する。 */
 function fetchBacklogIssuesPage_(
   cfg,
   projectId,
@@ -175,6 +178,7 @@ function fetchBacklogIssuesPage_(
   return backlogFetchJson_(url);
 }
 
+/** プロジェクトキーをBacklog内部のプロジェクトIDへ解決する。 */
 function resolveBacklogProjectId_(cfg, projectKey) {
   const cache = CacheService.getScriptCache();
   const cacheKey = 'backlog-project:' + projectKey;
@@ -185,6 +189,7 @@ function resolveBacklogProjectId_(cfg, projectKey) {
   return project.id;
 }
 
+/** Backlog APIへGETリクエストし、エラーを検証してJSONを返す。 */
 function backlogFetchJson_(url) {
   const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { Accept: 'application/json' } });
   const code = response.getResponseCode();
@@ -193,6 +198,7 @@ function backlogFetchJson_(url) {
   return JSON.parse(body);
 }
 
+/** Backlogの課題JSONをBacklogIssuesシートの共通スキーマへ正規化する。 */
 function normalizeBacklogIssue_(
   cfg,
   issue,
@@ -378,6 +384,7 @@ function normalizeBacklogIssue_(
   };
 }
 
+/** カスタム属性を将来の再解析用に必要項目だけのJSONへ圧縮する。 */
 function serializeCustomFields_(customFields) {
   return JSON.stringify((customFields || []).map(function(field) {
     return {
@@ -389,6 +396,7 @@ function serializeCustomFields_(customFields) {
   }));
 }
 
+/** 設定された名称・IDの候補から対象カスタム属性の値を取得する。 */
 function configuredCustomFieldValue_(issue, fieldKey) {
   const customFieldNames =
     CSEG_APP.CUSTOM_FIELDS || {};
@@ -409,6 +417,7 @@ function configuredCustomFieldValue_(issue, fieldKey) {
   );
 }
 
+/** カスタム属性一覧を名称またはIDで照合し、正規化済みの値を返す。 */
 function customFieldValue_(
   issue,
   acceptedNames,
@@ -445,6 +454,7 @@ function customFieldValue_(
   return '';
 }
 
+/** Backlogカスタム属性の配列・オブジェクト・真偽値を保存可能な文字列へ変換する。 */
 function normalizeCustomFieldValue_(value) {
   if (Array.isArray(value)) {
     return value
@@ -470,6 +480,7 @@ function normalizeCustomFieldValue_(value) {
     : value;
 }
 
+/** 開始日から完了日までの土日祝を除いた対応日数を計算する。 */
 function businessDays_(startValue, endValue, holidaySet) {
   if (!startValue || !endValue) return '';
   const start = new Date(startValue + 'T00:00:00+09:00');
@@ -484,12 +495,14 @@ function businessDays_(startValue, endValue, holidaySet) {
   return Math.max(0, count - 1);
 }
 
+/** Holidaysシートを日付検索用のSetへ変換する。 */
 function getHolidaySet_() {
   const set = {};
   readRows_('Holidays').forEach(function(row) { if (row.date) set[dateKey_(row.date)] = true; });
   return set;
 }
 
+/** 実行時間上限へ近づいた同期を再開する時間主導トリガーを登録する。 */
 function scheduleContinuation_() {
   const triggers = ScriptApp.getProjectTriggers();
 
@@ -516,6 +529,7 @@ function scheduleContinuation_() {
   );
 }
 
+/** 不要になったBacklog同期の継続トリガーを削除する。 */
 function deleteBacklogContinuationTriggers_() {
   const targetFunctions = [
     'continueBacklogSync_',
@@ -534,6 +548,7 @@ function deleteBacklogContinuationTriggers_() {
     });
 }
 
+/** 同期件数、処理時間、結果メッセージをSyncLogへ記録する。 */
 function logSync_(state, finishedAt, status, message) {
   appendRows_('SyncLog', [{
     syncId: state.syncId,
@@ -548,11 +563,13 @@ function logSync_(state, finishedAt, status, message) {
   }]);
 }
 
+/** JSON文字列を安全に解析し、失敗時は指定された既定値を返す。 */
 function parseJson_(raw, fallback) {
   if (!raw) return fallback;
   try { return JSON.parse(raw); } catch (ignore) { return fallback; }
 }
 
+/** 時間主導トリガーから未完了のBacklog同期を継続する。 */
 function continueBacklogSyncV2() {
   const props = PropertiesService.getScriptProperties();
 
@@ -600,6 +617,7 @@ function continueBacklogSyncV2() {
   return result;
 }
 
+/** 管理者操作で停止中の自動再開トリガーを再登録する。 */
 function restartBacklogAutoResumeV2() {
   const props = PropertiesService.getScriptProperties();
 

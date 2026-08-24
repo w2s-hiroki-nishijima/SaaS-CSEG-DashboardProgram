@@ -1,16 +1,21 @@
-/** Domain layer: business concepts and invariants. No SpreadsheetApp dependencies. */
+/** SpreadsheetAppへ依存せず、入力制約・計算・状態遷移などの業務ルールを表現する。 */
+/** 画面へそのまま返せる業務入力エラーを表す。 */
 class DomainValidationError extends Error {
+  /** エラーメッセージを保持したドメイン例外を生成する。 */
   constructor(message) {
     super(message);
     this.name = 'DomainValidationError';
   }
 }
 
+/** 改善要望・不具合報告の状態と変更ルールを管理する。 */
 class FeedbackReportEntity {
+  /** 保存済みの報告値からエンティティを復元する。 */
   constructor(values) {
     Object.assign(this, values);
   }
 
+  /** 入力を検証し、初期ステータス「未対応」の新規報告を生成する。 */
   static create(input, actor, clock, idFactory) {
     const type = String(input && input.type || '改善要望');
     const title = String(input && input.title || '').trim();
@@ -27,6 +32,7 @@ class FeedbackReportEntity {
     });
   }
 
+  /** 許可されたステータスへ変更し、更新者と更新日時を記録する。 */
   changeStatus(status, actor, clock) {
     if (CSEG_FEEDBACK.STATUSES.indexOf(status) < 0) throw new DomainValidationError('ステータスが不正です。');
     this.status = status;
@@ -35,12 +41,15 @@ class FeedbackReportEntity {
     return this;
   }
 
+  /** シートへ保存できるプレーンオブジェクトへ変換する。 */
   toRow() {
     return Object.assign({}, this);
   }
 }
 
+/** 報告へ追加するコメントの生成ルールを管理する。 */
 class FeedbackCommentEntity {
+  /** 報告IDと本文を検証し、投稿者情報付きコメントを生成する。 */
   static create(reportId, text, actor, clock, idFactory) {
     const comment = String(text || '').trim();
     if (!reportId) throw new DomainValidationError('対象の報告が指定されていません。');
@@ -53,7 +62,9 @@ class FeedbackCommentEntity {
   }
 }
 
+/** 画面から入力された月別アサイン実績を検証する。 */
 class AssignmentActualEntity {
+  /** メンバー、対象月、各時間を正規化した保存用データを生成する。 */
   static fromInput(input) {
     if (!input || !input.memberId) throw new DomainValidationError('メンバーを選択してください。');
     return {
@@ -65,7 +76,9 @@ class AssignmentActualEntity {
   }
 }
 
+/** 過去月にも影響しない目標件数スナップショットを計算する。 */
 class TargetSnapshotEntity {
+  /** 速度係数と有効アサイン時間から目標件数を算出する。 */
   static calculate(speed, assignment, minus, adjustment) {
     return round_(Math.max(0,
       toNumber_(speed) * (toNumber_(assignment) - toNumber_(minus) - toNumber_(adjustment)) /
@@ -74,7 +87,9 @@ class TargetSnapshotEntity {
   }
 }
 
+/** メンバーのスキルレベルと評価ポイントを生成する。 */
 class SkillScoreEntity {
+  /** スキルの上限レベルを適用し、保存用スコアを生成する。 */
   static create(input, member, skill, actor, clock) {
     if (!member || !skill) throw new DomainValidationError('メンバーまたはスキルが見つかりません。');
     const maxLevel = toNumber_(skill.maxLevel, 5);
@@ -94,7 +109,9 @@ class SkillScoreEntity {
   }
 }
 
+/** スキルマスタの入力制約と初期値を管理する。 */
 class SkillDefinitionEntity {
+  /** スキル名、上限、ポイントなどを検証して保存用定義を生成する。 */
   static create(input, actor, clock, idFactory) {
     if (!input || !String(input.skillName || '').trim()) {
       throw new DomainValidationError('スキル名を入力してください。');
@@ -114,7 +131,9 @@ class SkillDefinitionEntity {
   }
 }
 
+/** 通知ルールの種類、送信先、スケジュールの入力制約を管理する。 */
 class NotificationRuleEntity {
+  /** 許可された通知種別とチャネルだけを受け付け、保存用ルールを生成する。 */
   static create(input, actor, clock, idFactory) {
     if (!input || !String(input.name || '').trim()) {
       throw new DomainValidationError('通知名を入力してください。');
@@ -141,6 +160,7 @@ class NotificationRuleEntity {
   }
 }
 
+/** ドメイン入力を0以上の数値へ変換し、負数なら業務エラーにする。 */
 function domainNonNegative_(value) {
   const number = toNumber_(value, 0);
   if (number < 0) throw new DomainValidationError('0以上の数値を入力してください。');

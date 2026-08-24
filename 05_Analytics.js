@@ -1,8 +1,10 @@
-/** Dashboard, performance, target and aggregate calculations. */
+/** ダッシュボード、実績、目標、チーム集計の画面用データを生成する。 */
+/** 対象月の目標件数をTarget Application Serviceから取得する。 */
 function getMonthTargets_(month) {
   return getApplicationServices_().target.getTargets(month);
 }
 
+/** 対象月のKPI、日次推移、チーム集計、期限超過をダッシュボード用にまとめる。 */
 function buildDashboardData_(month) {
   const snapshot = getMonthlyIssueSnapshot_(month);
   const overdue = getOverdueSnapshot_();
@@ -28,6 +30,7 @@ function buildDashboardData_(month) {
   };
 }
 
+/** 実績キャッシュと月別所属・目標をメンバー単位で結合する。 */
 function buildPerformanceData_(month) {
   const snapshot = getMonthlyIssueSnapshot_(month);
   const targets = getMonthTargets_(month);
@@ -35,7 +38,9 @@ function buildPerformanceData_(month) {
   const memberByName = {};
   members.forEach(function(m) { memberByName[m.name] = m; });
   const byMember = {};
+  // 氏名と所属チームを結合し、同名・複数所属でも衝突しない集計キーを作る。
   function metricKey(name, team) { return String(name || '') + '\u001f' + String(team || '未設定'); }
+  // メンバー指標が未作成なら初期値を用意して返す。
   function ensureMember(name, team) {
     const key = metricKey(name, team);
     if (!byMember[key]) {
@@ -90,10 +95,12 @@ function buildPerformanceData_(month) {
   };
 }
 
+/** 対象月の目標件数画面データをApplication Serviceから取得する。 */
 function buildTargetData_(month) {
   return getApplicationServices_().target.getView(month);
 }
 
+/** 対象月のチーム実績、期限超過、全体合計をアグリゲート画面用にまとめる。 */
 function buildAggregateData_(month) {
   const snapshot = getMonthlyIssueSnapshot_(month);
   const targets = getMonthTargets_(month);
@@ -117,14 +124,17 @@ function buildAggregateData_(month) {
   };
 }
 
+/** 対象月のアサイン画面データをApplication Serviceから取得する。 */
 function buildAssignmentData_(month, user) {
   return getApplicationServices_().assignment.getView(month, user);
 }
 
+/** スキル画面データをApplication Serviceから取得する互換関数。 */
 function buildSkillData_(user) {
   return getApplicationServices_().skill.getView(user);
 }
 
+/** 設定された四半期について作成・完了・ポイント・品質の累計を集計する。 */
 function buildTermSummary_() {
   const cfg = getRuntimeConfig_();
   const start = new Date(cfg.termStartDate + 'T00:00:00+09:00');
@@ -145,6 +155,7 @@ function buildTermSummary_() {
   return { label: startKey + ' 〜 ' + endKey, points: round_(points, 2), targetCount: round_(target, 1), achievementRate: target ? points / target : 0 };
 }
 
+/** 月次スナップショットの日別Mapを、月初から月末までの連続配列へ変換する。 */
 function buildDailySeriesFromSnapshot_(month, snapshot) {
   const year = Number(month.slice(0, 4)); const mon = Number(month.slice(5, 7));
   const days = new Date(year, mon, 0).getDate();
@@ -160,8 +171,10 @@ function buildDailySeriesFromSnapshot_(month, snapshot) {
   return out;
 }
 
+/** 実績スナップショットと目標をチーム単位で結合し、達成率を計算する。 */
 function buildTeamMetricsFromSnapshot_(snapshot, targets) {
   const map = {};
+  // チーム指標が未作成なら初期値を用意して返す。
   function ensure(name) {
     if (!map[name]) map[name] = { name: name, completedCount: 0, points: 0, targetCount: 0, qualitySum: 0, qualityCount: 0, tat2: 0, tat5: 0, tat6: 0 };
     return map[name];
@@ -196,6 +209,7 @@ function buildTeamMetricsFromSnapshot_(snapshot, targets) {
   }).sort(function(a, b) { return b.points - a.points; });
 }
 
+/** 課題行から指定月の日別作成件数・完了件数を組み立てる旧互換処理。 */
 function buildDailySeries_(month, created, completed) {
   const year = Number(month.slice(0, 4)); const mon = Number(month.slice(5, 7));
   const days = new Date(year, mon, 0).getDate();
@@ -210,8 +224,10 @@ function buildDailySeries_(month, created, completed) {
   return out;
 }
 
+/** 指定フィールドを軸に完了実績と目標をグループ集計する共通処理。 */
 function groupMetrics_(completed, targets, field) {
   const map = {};
+  // 指定グループの指標が未作成なら初期値を用意して返す。
   function ensure(name) { if (!map[name]) map[name] = { name: name, completedCount: 0, points: 0, targetCount: 0, quality: [], tat2: 0, tat5: 0, tat6: 0 }; return map[name]; }
   targets.forEach(function(r) { ensure(String(r[field] || '未設定')).targetCount += toNumber_(r.targetCount); });
   completed.forEach(function(r) {
@@ -227,16 +243,26 @@ function groupMetrics_(completed, targets, field) {
   }).sort(function(a, b) { return b.points - a.points; });
 }
 
+/** 完了日、状態ID、状態名のいずれかから課題が完了済みか判定する。 */
 function isClosedIssue_(row) {
   return Boolean(row.closedAt) || Number(row.statusId) === 4 || CSEG_APP.CLOSED_STATUS_NAMES.indexOf(String(row.status || '')) >= 0;
 }
 
+/** 課題行から期限超過一覧などで使う最小表示項目だけを取り出す。 */
 function issueListItem_(r) { return { issueKey: r.issueKey, summary: r.summary, dueDate: r.dueDate, status: r.status, owner: r.csegOwner || r.assigneeName, team: r.team, url: r.url }; }
+/** メンバーIDから表示名を解決する。 */
 function memberNameById_(id, members) { const m = members.find(function(v) { return String(v.memberId) === String(id); }); return m ? m.name : ''; }
+/** メンバー実績を加算するための初期値オブジェクトを生成する。 */
 function emptyMemberMetric_(name, team) { return { name: name, team: team || '', completedCount: 0, points: 0, emergencyCount: 0, qualitySum: 0, qualityCount: 0, tat2: 0, tat5: 0, tat6: 0, targetCount: 0 }; }
+/** スキル係数と経験係数を掛け合わせ、メンバーの速度係数を計算する。 */
 function calculateSpeed_(m) { const skill = coefficient_('skill', m.skillLevel); const exp = coefficient_('experience', m.experienceLevel); return round_(skill * exp, 4); }
+/** TargetCoefficientsから区分・コードに対応する係数を取得する。 */
 function coefficient_(kind, code) { const r = readRows_('TargetCoefficients').find(function(v) { return v.kind === kind && v.code === code; }); return r ? toNumber_(r.coefficient, 1) : 1; }
+/** オブジェクト配列の指定フィールドを数値として合計する。 */
 function sum_(rows, field) { return rows.reduce(function(total, r) { return total + toNumber_(r[field]); }, 0); }
+/** 数値配列の平均を返し、空配列の場合はnullを返す。 */
 function average_(values) { return values.length ? values.reduce(function(a, b) { return a + b; }, 0) / values.length : null; }
+/** 浮動小数誤差を考慮して指定桁数へ丸める。 */
 function round_(value, digits) { const p = Math.pow(10, digits || 0); return Math.round((Number(value) + Number.EPSILON) * p) / p; }
+/** 配列から重複値を除き、元の出現順を維持した配列を返す。 */
 function unique_(values) { return values.filter(function(v, i, a) { return a.indexOf(v) === i; }); }
