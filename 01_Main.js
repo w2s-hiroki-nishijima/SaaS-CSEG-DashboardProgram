@@ -75,7 +75,7 @@ function buildBootstrapData_(user) {
       { id: 'performance', label: '実績確認', icon: '◎' },
       { id: 'skills', label: 'スキルポイント', icon: '◇' },
       { id: 'assignments', label: 'アサイン状況', icon: '▦' },
-      { id: 'errorsearch', label: 'エラー解析', icon: '⊡', admin: true },
+      { id: 'errorsearch', label: 'エラー解析', icon: '⊡' },
       { id: 'notifications', label: '通知センター', icon: '◉', admin: true },
       { id: 'targets', label: 'メンバー目標件数', icon: '⌁', admin: true },
       { id: 'aggregate', label: 'アグリゲート', icon: '▥', admin: true },
