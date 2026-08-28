@@ -32,10 +32,16 @@ function extractErrorInfo_(text, lang) {
       break;
     }
   }
+  if (!type && lang === 'csharp') {
+    type = detectJapaneseCsharpType_(text) || 'Unknown';
+    const jpMsg = text.match(/^[ \t]*->[ \t]*(.+)$/m);
+    if (jpMsg) message = jpMsg[1].trim().slice(0, 200);
+  }
   if (!type) type = 'Unknown';
 
   if (lang === 'csharp') {
-    const loc = text.match(/ in (.+\.cs):line (\d+)/);
+    const loc = text.match(/ in (.+\.cs):line (\d+)/)
+             || text.match(/(\S+\.(?:aspx\.cs|ascx\.cs|cs)):行 (\d+)/);
     if (loc) location = loc[1].replace(/.*[/\\]/, '') + ' ' + loc[2] + '行目';
   } else {
     const loc = text.match(/ at [\w$.<>]+ \((.+\.[jt]sx?):(\d+):\d+\)/)
@@ -44,6 +50,40 @@ function extractErrorInfo_(text, lang) {
   }
 
   return { type, message, location };
+}
+
+/** .NET が日本語環境で出力するエラーメッセージから例外クラス名を推定するパターンテーブル。上位パターンほど具体的になるよう順序を維持する。 */
+const JAPANESE_CSHARP_TYPE_PATTERNS_ = [
+  { pattern: /にキャストできません/,                                      type: 'InvalidCastException' },
+  { pattern: /オブジェクト参照がオブジェクト インスタンスに設定されていません/, type: 'NullReferenceException' },
+  { pattern: /値を [Nn]ull にすることはできません/,                        type: 'ArgumentNullException' },
+  { pattern: /インデックスが配列の境界の外/,                               type: 'IndexOutOfRangeException' },
+  { pattern: /指定された引数は.+有効な範囲/,                               type: 'ArgumentOutOfRangeException' },
+  { pattern: /入力文字列の形式が正しくありません/,                          type: 'FormatException' },
+  { pattern: /算術演算の結果オーバーフロー/,                               type: 'OverflowException' },
+  { pattern: /0 で除算/,                                                 type: 'DivideByZeroException' },
+  { pattern: /コレクションが変更されました/,                               type: 'InvalidOperationException' },
+  { pattern: /シーケンスに要素が含まれていません/,                          type: 'InvalidOperationException' },
+  { pattern: /破棄されたオブジェクト/,                                    type: 'ObjectDisposedException' },
+  { pattern: /スタック オーバーフロー/,                                   type: 'StackOverflowException' },
+  { pattern: /メモリが不足/,                                             type: 'OutOfMemoryException' },
+  { pattern: /指定されたファイルが見つかりません/,                          type: 'FileNotFoundException' },
+  { pattern: /指定されたパスの一部が見つかりません/,                        type: 'DirectoryNotFoundException' },
+  { pattern: /アクセスが拒否されました/,                                  type: 'UnauthorizedAccessException' },
+  { pattern: /指定されたキーはディレクトリに存在しませんでした/,              type: 'KeyNotFoundException' },
+  { pattern: /メソッドまたは操作は実装されていません/,                      type: 'NotImplementedException' },
+  { pattern: /指定されたメソッドはサポートされていません/,                   type: 'NotSupportedException' },
+  { pattern: /操作がタイムアウト/,                                        type: 'TimeoutException' },
+  { pattern: /タスクはキャンセルされました/,                               type: 'TaskCanceledException' },
+  { pattern: /操作はキャンセルされました/,                                 type: 'OperationCanceledException' },
+];
+
+/** 日本語 .NET エラーメッセージから例外クラス名を推定する。一致しない場合は null を返す。 */
+function detectJapaneseCsharpType_(text) {
+  for (const entry of JAPANESE_CSHARP_TYPE_PATTERNS_) {
+    if (entry.pattern.test(text)) return entry.type;
+  }
+  return null;
 }
 
 /** C# の主要例外と対処のマスタ。例外クラス名をキーとして原因・対処を保持する。辞書に存在しない例外はフォールバックメッセージで対応する。 */
