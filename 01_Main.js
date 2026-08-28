@@ -78,6 +78,7 @@ function buildBootstrapData_(user) {
       { id: 'notifications', label: '通知センター', icon: '◉', admin: true },
       { id: 'targets', label: 'メンバー目標件数', icon: '⌁', admin: true },
       { id: 'aggregate', label: 'アグリゲート', icon: '▥', admin: true },
+      { id: 'errorsearch', label: 'エラー解析', icon: '⊡', admin: true },
       { id: 'settings', label: '設定', icon: '⚙', admin: true },
       { id: 'feedback', label: '改善要望・不具合報告', icon: '!' }
     ]
@@ -268,4 +269,11 @@ function buildSettingsView_(month) {
       return row;
     })
   };
+}
+
+/** LLM を使わずコストゼロで C#・JS エラーを読解する公開RPC。解析実装は 17_SearchError.js に委譲する。 */
+function getErrorAnalysis(text) {
+  assertAdmin_();
+  if (!text || !String(text).trim()) throw new Error('エラーログを入力してください。');
+  return { analysis: analyzeErrorLogLocal_(String(text).trim()) };
 }

@@ -1,4 +1,10 @@
 /** Backlogの全件・差分同期、正規化、時間制限時の継続実行を担当する。 */
+
+/** installTriggers_() が毎時登録する時間主導トリガーのエントリポイント。 */
+function runHourlyBacklogSync_() {
+  startBacklogSync_('incremental');
+}
+
 /** 管理者操作から差分同期を開始し、同期状態を画面へ返す公開RPC。 */
 function manualBacklogSync() {
   assertAdmin_();

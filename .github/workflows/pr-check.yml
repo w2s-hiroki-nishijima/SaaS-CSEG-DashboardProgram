@@ -1,0 +1,20 @@
+name: PR 構文チェック
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: GitHub のコードを取得
+        uses: actions/checkout@v4
+
+      - name: Node.js をセットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: JS 構文チェック
+        run: find . -name "*.js" -not -path "./.vs/*" | xargs -I{} node --check {}
