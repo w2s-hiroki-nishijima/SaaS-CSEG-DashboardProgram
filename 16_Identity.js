@@ -35,7 +35,8 @@ function clientApiHandlers_() {
     manualBacklogSync: manualBacklogSync,
     rebuildAnalyticsCacheAfterBacklogSync: rebuildAnalyticsCacheAfterBacklogSync,
     resetMemberGoogleIdentity: resetMemberGoogleIdentity,
-    logoutGoogleIdentity: logoutGoogleIdentity
+    logoutGoogleIdentity: logoutGoogleIdentity,
+    getErrorAnalysis: getErrorAnalysis
   };
 }
 

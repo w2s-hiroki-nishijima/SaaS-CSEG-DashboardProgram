@@ -59,6 +59,7 @@ const CLIENT_PAGES = Object.freeze({
   aggregate: { load: month => rpc('getAggregateView', month), render: renderAggregate },
   notifications: { load: () => rpc('getNotificationView'), render: renderNotifications, monthIndependent: true },
   settings: { load: month => rpc('getSettingsView', month), render: renderSettings },
+  errorsearch: { load: () => Promise.resolve({}), render: renderErrorAnalysis, monthIndependent: true },
   feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
 });
 
@@ -797,6 +798,45 @@ async function saveAssignment() {
     await rpc('saveAssignmentEntry', input);
     toast('保存しました');
     await reloadCurrentPage();
+  } catch (e) {
+    toast(e.message, true);
+  } finally {
+    busy(false);
+  }
+}
+
+/** エラー解析画面を描画する。入力・解析・結果表示の1パネル構成。 */
+function renderErrorAnalysis() {
+  $('#content').innerHTML = (
+    `<section class="panel" style="max-width:800px">` +
+      `<div class="panel-head"><div><div class="panel-title">エラー解析</div><div class="panel-sub">エラーログを貼り付けると原因・影響・対処方法をAIが読解します</div></div></div>` +
+      `<div class="panel-body">` +
+        `<div class="field">` +
+          `<label>エラーログ</label>` +
+          `<textarea id="errorLogInput" rows="12" maxlength="20000" placeholder="ここにエラーログを貼り付けてください..." style="font-family:monospace;font-size:0.85em"></textarea>` +
+        `</div>` +
+        `<div class="actions"><button class="primary" onclick="runErrorAnalysis()">解析する</button></div>` +
+        `<div id="errorAnalysisResult" style="display:none">` +
+          `<div class="field" style="margin-top:1.5em">` +
+            `<label>解析結果</label>` +
+            `<div id="errorAnalysisText" style="white-space:pre-wrap;line-height:1.7;padding:1em;background:var(--surface-alt,#f8f8f8);border-radius:6px;font-size:0.9em"></div>` +
+          `</div>` +
+        `</div>` +
+      `</div>` +
+    `</section>`
+  );
+}
+
+/** 入力されたエラーログをサーバーへ送り、解析結果を表示する。 */
+async function runErrorAnalysis() {
+  const text = $('#errorLogInput').value;
+  if (!text.trim()) { toast('エラーログを入力してください', true); return; }
+  busy(true, '解析中...');
+  $('#errorAnalysisResult').style.display = 'none';
+  try {
+    const r = await rpc('getErrorAnalysis', text);
+    $('#errorAnalysisText').textContent = r.analysis;
+    $('#errorAnalysisResult').style.display = '';
   } catch (e) {
     toast(e.message, true);
   } finally {

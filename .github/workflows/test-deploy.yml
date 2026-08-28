@@ -1,12 +1,7 @@
-name: GAS 手動デプロイ
+name: GAS テストデプロイ
 
 on:
   workflow_dispatch:
-    inputs:
-      deploy_comment:
-        description: "デプロイコメント"
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -16,7 +11,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  test-deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -42,11 +37,10 @@ jobs:
       - name: GAS にコードを反映
         run: clasp push --force
 
-      - name: 既存の Web アプリを再デプロイ
+      - name: テストデプロイを更新
         env:
-          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
-          DEPLOY_COMMENT: ${{ inputs.deploy_comment }}
+          GAS_TEST_DEPLOYMENT_ID: ${{ secrets.GAS_TEST_DEPLOYMENT_ID }}
         run: |
           clasp create-deployment \
-            --deploymentId "$GAS_DEPLOYMENT_ID" \
-            --description "$DEPLOY_COMMENT"
+            --deploymentId "$GAS_TEST_DEPLOYMENT_ID" \
+            --description "test: ${{ github.ref_name }} @ ${{ github.sha }}"
