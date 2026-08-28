@@ -55,11 +55,11 @@ const CLIENT_PAGES = Object.freeze({
   performance: { load: month => rpc('getPerformanceView', month), render: renderPerformance },
   skills: { load: () => rpc('getSkillView'), render: renderSkills, monthIndependent: true },
   assignments: { load: month => rpc('getAssignmentView', month), render: renderAssignments },
+  errorsearch: { load: () => Promise.resolve({}), render: renderErrorAnalysis, monthIndependent: true },
   targets: { load: month => rpc('getTargetView', month), render: renderTargets },
   aggregate: { load: month => rpc('getAggregateView', month), render: renderAggregate },
   notifications: { load: () => rpc('getNotificationView'), render: renderNotifications, monthIndependent: true },
   settings: { load: month => rpc('getSettingsView', month), render: renderSettings },
-  errorsearch: { load: () => Promise.resolve({}), render: renderErrorAnalysis, monthIndependent: true },
   feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
 });
 
