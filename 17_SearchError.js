@@ -400,7 +400,10 @@ const CSHARP_ERROR_DICT_ = {
       'is でキャスト可能か事前に確認する',
       '型階層・継承関係を見直す'
     ],
-    typicalMessage: "型 'A' のオブジェクトを型 'B' にキャストできません。場所 Form_Dir_File.Event(...)",
+    typicalMessage: [
+        '型 'A' のオブジェクトを型 'B' にキャストできません。',
+        '場所 Form_Dir_File.Event(...)'
+    ]
     steps: [
       'メッセージから期待型（B）・実型（A）・イベントハンドラ名（Event）を把握する',
       'エラー発生行のキャスト元・キャスト先を確認する',
@@ -620,7 +623,7 @@ function buildAnalysisText_(lang, info, entry) {
       lines.push('【調査手順】');
       lines.push('代表的なメッセージ:');
       const msgs = Array.isArray(entry.typicalMessage) ? entry.typicalMessage : [entry.typicalMessage];
-      msgs.forEach((s, i) => lines.push((i + 1) + '. ' + s));
+      msgs.forEach((s, i) => lines.push(s));
       lines.push('');
       entry.steps.forEach((s, i) => lines.push((i + 1) + '. ' + s));
     }
