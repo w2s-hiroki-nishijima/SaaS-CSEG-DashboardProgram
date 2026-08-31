@@ -820,13 +820,30 @@
         opacity:0.5;
     }
 
+    .spark-bar.created,
+    .spark-legend.created {
+        --spark-color: chocolate
+    }
+
+    .spark-bar.completed,
+    .spark-legend.completed {
+        --spark-color: chartreuse
+    }
+
     .spark-bar.created {
         height: 100%;
-        background: chocolate;
+        background: var(--spark-color)
     }
 
     .spark-bar.completed {
-        background: chartreuse;
+        background: var(--spark-color)
+    }
+
+    .spark-legend {
+        margin-left: 2px;
+        font-size: 10px;
+        vertical-align: middle;
+        color: var(--spark-color)
     }
 
     .stat-line {
