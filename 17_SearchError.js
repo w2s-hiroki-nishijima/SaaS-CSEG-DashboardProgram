@@ -401,7 +401,7 @@ const CSHARP_ERROR_DICT_ = {
       '型階層・継承関係を見直す'
     ],
     typicalMessage: [
-        '型 'A' のオブジェクトを型 'B' にキャストできません。',
+        "型 'A' のオブジェクトを型 'B' にキャストできません。",
         '場所 Form_Dir_File.Event(...)'
     ]
     steps: [
