@@ -60,7 +60,7 @@ function startBacklogSync_(mode) {
         projectIndex: 0,
         offset: 0,
         lowerBound: lowerBound,
-        upperBound: new Date().toISOString(),
+        upperBound: nowIso_(),
         startedAt: startedAt,
         fetched: 0,
         inserted: 0,

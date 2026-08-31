@@ -272,8 +272,10 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
     dueBucket.dailyCreated[dueDate] =
       (dueBucket.dailyCreated[dueDate] || 0) + 1;
 
-    dueBucket.dailyCompleted[dueDate] =
-      (dueBucket.dailyCompleted[dueDate] || 0) + 1;
+    if (isClosedIssue_(issue)) {
+      dueBucket.dailyCompleted[dueDate] =
+        (dueBucket.dailyCompleted[dueDate] || 0) + 1;
+    }
 
     teams.forEach(function(team) {
       dueBucket.createdByTeam[team] =

@@ -311,7 +311,7 @@ function renderDashboard(d) {
         `<div class="panel-head">` +
           `<div>` +
             `<div class="panel-title">日次推移</div>` +
-            `<div class="panel-sub">起票数 / 完了数</div>` +
+            `<div class="panel-sub">起票数<span class="spark-legend created">■</span> / 完了数<span class="spark-legend completed">■</span></div>` +
           `</div>` +
           `<span class="pill">最終同期 ${esc(d.lastSyncAt || '未同期')}</span>` +
         `</div>` +

@@ -806,23 +806,45 @@
     .spark-col {
         flex: 1;
         min-width: 3px;
-        display: grid;
-        gap: 2px;
-        align-content: end;
+        position: relative;
         height: 100%
     }
 
     .spark-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
         border-radius: 3px 3px 0 0;
-        min-height: 1px
+        min-height: 1px;
+        opacity:0.5;
+    }
+
+    .spark-bar.created,
+    .spark-legend.created {
+        --spark-color: chocolate
+    }
+
+    .spark-bar.completed,
+    .spark-legend.completed {
+        --spark-color: chartreuse
     }
 
     .spark-bar.created {
-        background: #99f6e4
+        height: 100%;
+        background: var(--spark-color)
     }
 
     .spark-bar.completed {
-        background: #0f766e
+        background: var(--spark-color)
+    }
+
+    .spark-legend {
+        margin-left: 2px;
+        font-size: 10px;
+        vertical-align: middle;
+        color: var(--spark-color);
+        opacity: 0.5;
     }
 
     .stat-line {
