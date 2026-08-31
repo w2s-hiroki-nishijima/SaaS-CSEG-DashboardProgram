@@ -257,14 +257,6 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
   const teams = splitCsegTeams_(issue.team);
   if (teams.length === 0) teams.push('未設定');
 
-  // 起票数は起票日（createdAt）の月バケットへ計上する
-  const createdMonth = /^\d{4}-\d{2}-\d{2}$/.test(String(issue.createdAt || '').slice(0, 10))
-    ? String(issue.createdAt).slice(0, 7)
-    : '';
-  if (createdMonth) {
-    ensureMonthBucket_(work.months, createdMonth).createdCount++;
-  }
-
   // 月別実績は、期限日の月へ計上する
   if (dueMonth) {
     const dueBucket = ensureMonthBucket_(
@@ -272,7 +264,8 @@ function applyIssueToAnalyticsWork_(work, issue, today) {
       dueMonth
     );
 
-    // 完了数は完了済み課題のみ計上する
+    // 起票数は期限日基準の全課題、完了数は完了済みのみ（差分が未完了数になる）
+    dueBucket.createdCount++;
     if (isClosedIssue_(issue)) {
       dueBucket.completedCount++;
     }
