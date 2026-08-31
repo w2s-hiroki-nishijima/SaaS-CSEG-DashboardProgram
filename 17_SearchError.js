@@ -615,6 +615,15 @@ function buildAnalysisText_(lang, info, entry) {
   if (entry) {
     lines.push('【原因】');
     lines.push(entry.cause);
+    if (entry.steps) {
+      lines.push('');
+      lines.push('【調査手順】');
+      lines.push('代表的なメッセージ:');
+      const msgs = Array.isArray(entry.typicalMessage) ? entry.typicalMessage : [entry.typicalMessage];
+      msgs.forEach((s, i) => lines.push((i + 1) + '. ' + s));
+      lines.push('');
+      entry.steps.forEach((s, i) => lines.push((i + 1) + '. ' + s));
+    }
     lines.push('');
     lines.push('【対処方法】');
     entry.suggestions.forEach((s, i) => lines.push((i + 1) + '. ' + s));
@@ -625,15 +634,6 @@ function buildAnalysisText_(lang, info, entry) {
     lines.push('【対処のヒント】');
     lines.push('1. エラーメッセージをそのまま検索エンジンで調べる');
     lines.push('2. スタックトレースで発生箇所を特定し、周辺コードを確認する');
-  }
-
-  const investigation = lang === 'csharp' ? CSHARP_ERROR_DICT_[info.type] : null;
-  if (investigation) {
-    lines.push('');
-    lines.push('【調査手順】');
-    lines.push('代表的なメッセージ: ' + investigation.typicalMessage);
-    lines.push('');
-    investigation.steps.forEach((s, i) => lines.push((i + 1) + '. ' + s));
   }
 
   return lines.join('\n');
