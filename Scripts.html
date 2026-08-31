@@ -319,7 +319,7 @@ function renderDashboard(d) {
           `<div class="spark">` +
             `${d.daily.map(x => (
               `<div class="spark-col" title="${x.date} 起票${x.created} 完了${x.completed}">` +
-                `<div class="spark-bar created" style="height:${x.created / dailyMax * 100}%">` +
+                `<div class="spark-bar created">` +
                 `</div>` +
                 `<div class="spark-bar completed" style="height:${x.completed / dailyMax * 100}%">` +
                 `</div>` +
