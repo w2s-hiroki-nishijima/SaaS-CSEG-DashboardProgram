@@ -403,7 +403,7 @@ const CSHARP_ERROR_DICT_ = {
     typicalMessage: [
         "型 'A' のオブジェクトを型 'B' にキャストできません。",
         '場所 Form_Dir_File.Event(...)'
-    ]
+    ],
     steps: [
       'メッセージから期待型（B）・実型（A）・イベントハンドラ名（Event）を把握する',
       'エラー発生行のキャスト元・キャスト先を確認する',
