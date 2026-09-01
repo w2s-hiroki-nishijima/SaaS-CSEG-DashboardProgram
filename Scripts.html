@@ -301,8 +301,8 @@ function renderDashboard(d) {
   const dailyMax = Math.max(1, ...d.daily.flatMap(x => [x.created, x.completed]));
   $('#content').innerHTML = (
     `<div class="kpi-grid">` +
-      `${kpi('今月の総起票数', num(k.createdCount), 'Backlog作成日基準')}` +
-      `${kpi('今月の完了件数', num(k.completedCount), '完了日基準')}` +
+      `${kpi('今月の総件数', num(k.createdCount), '期限日基準')}` +
+      `${kpi('今月の完了件数', num(k.completedCount), '期限日基準・完了済みのみ')}` +
       `${kpi('期限超過チケット', num(k.overdueCount), '未完了・期限経過', 'danger-card')}` +
       `${kpi('目標達成率', pct(k.achievementRate), `${num(k.responsePoints, 1)} / ${num(k.targetCount, 1)} pt`)}` +
     `</div>` +
