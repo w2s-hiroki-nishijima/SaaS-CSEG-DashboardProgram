@@ -65,10 +65,32 @@ function seedDefaults_() {
 
 /** 同期・通知などの既存重複トリガーを避けて定期トリガーを登録する。 */
 function installTriggers_() {
-  const handlers = ['runHourlyBacklogSync_', 'runNotificationJobs_', 'continueBacklogSync_'];
+  const handlers = ['runHourlyBacklogSync_', 'runNotificationJobs_', 'continueBacklogSync_', 'runMonthlyTeamSheetCreate_'];
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
   });
   ScriptApp.newTrigger('runHourlyBacklogSync_').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('runNotificationJobs_').timeBased().everyDays(1).atHour(9).create();
+  ScriptApp.newTrigger('runMonthlyTeamSheetCreate_').timeBased().onMonthDay(1).atHour(8).create();
+}
+
+/** 毎月1日に前月タブを複製して当月の所属チームシートを作成する。 */
+function runMonthlyTeamSheetCreate_() {
+  const ss = openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック');
+  const currentName = monthlyTeamSheetName_(new Date());
+  if (ss.getSheetByName(currentName)) return;
+
+  const prevDate = new Date();
+  prevDate.setDate(1);
+  prevDate.setMonth(prevDate.getMonth() - 1);
+  const prevName = monthlyTeamSheetName_(prevDate);
+  const prevSheet = ss.getSheetByName(prevName);
+  if (!prevSheet) throw new Error(prevName + ' のシートが見つからないため ' + currentName + ' を作成できませんでした。');
+
+  prevSheet.copyTo(ss).setName(currentName);
+}
+
+/** GASエディタから手動実行して当月の所属チームシートを作成する。 */
+function createMonthlyTeamSheet() {
+  runMonthlyTeamSheetCreate_();
 }
