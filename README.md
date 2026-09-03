@@ -59,6 +59,7 @@ SaaS-CSEG の実績、目標、アサイン、スキル、通知、改善要望�
 | `14_Application.js` | 機能別Application ServiceとページQuery Service |
 | `15_SelfTests.js` | シートを書き換えない業務ルールの簡易テスト |
 | `16_Identity.js` | Google固定ID認証、OAuthコールバック、一時ユーザーキー連携、RPCディスパッチ |
+| `17_SearchError.js` | エラー解析 |
 | `Index.html` | HTMLシェル、サイドバー、ヘッダー、テンプレート読込み |
 | `Styles.html` | 全画面共通のスタイル |
 | `Scripts.html` | 画面状態、RPC、ページレジストリ、各画面レンダラーと操作 |
