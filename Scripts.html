@@ -976,7 +976,7 @@ function renderTargets(d) {
               `<th>係数</th>` +
               `<th>アサイン時間</th>` +
               `<th>マイナス</th>` +
-              `<th>調整</th>` +
+              `<th class="t-center">調整</th>` +
               `<th>目標件数</th>` +
             `</tr>` +
           `</thead>` +
@@ -991,7 +991,7 @@ function renderTargets(d) {
                 `<td>${num(r.speedCoefficient, 4)}</td>` +
                 `<td>${num(r.assignmentHours, 1)}</td>` +
                 `<td>${num(r.minusHours, 1)}</td>` +
-                `<td><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:64px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit"></td>` +
+                `<td class="t-center"><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:64px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit"></td>` +
                 `<td class="t-result">` +
                   `<strong>${num(r.targetCount, 1)}</strong>` +
                 `</td>` +
@@ -1004,16 +1004,22 @@ function renderTargets(d) {
   );
 
   $$('#targetTable .adjustment-input').forEach(input => {
-    input.addEventListener('change', async function() {
-      const tr = this.closest('tr');
-      const memberId = tr.dataset.id;
+    input.addEventListener('focus', function() {
+      this.dataset.prev = this.value;
+    });
+    input.addEventListener('blur', async function() {
       const adjustment = Math.max(0, parseFloat(this.value) || 0);
       this.value = adjustment;
+      if (String(adjustment) === String(parseFloat(this.dataset.prev) || 0)) return;
+      toast('調整を反映中です');
+      const tr = this.closest('tr');
+      const memberId = tr.dataset.id;
       try {
         const result = await rpc('saveAdjustmentHours', { month: d.month, memberId, adjustmentHours: adjustment });
         tr.querySelector('.t-result strong').textContent = num(result.targetCount, 1);
         toast('調整を保存しました');
       } catch(e) {
+        this.value = this.dataset.prev;
         toast(e.message, true);
       }
     });
