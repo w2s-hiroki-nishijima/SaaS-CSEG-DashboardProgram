@@ -970,11 +970,11 @@ function renderTargets(d) {
         `<table class="table" id="targetTable">` +
           `<thead>` +
             `<tr>` +
-              `<th>メンバー</th>` +
+              `<th style="width: 30%;">メンバー</th>` +
               `<th>チーム</th>` +
-              `<th>レベル</th>` +
-              `<th>係数</th>` +
-              `<th>アサイン時間</th>` +
+              `<th class="col-stat">レベル</th>` +
+              `<th class="col-stat">係数</th>` +
+              `<th class="col-stat">アサイン時間</th>` +
               `<th class="col-stat">マイナス</th>` +
               `<th class="col-stat">調整</th>` +
               `<th class="col-stat">目標件数</th>` +
@@ -987,12 +987,12 @@ function renderTargets(d) {
                   `<strong>${esc(r.memberName)}</strong>` +
                 `</td>` +
                 `<td>${esc(r.team)}</td>` +
-                `<td>${esc(r.skillLevel)}-${esc(String(r.experienceLevel).replace('CSEG', ''))}</td>` +
-                `<td>${num(r.speedCoefficient, 4)}</td>` +
-                `<td>${num(r.assignmentHours, 1)}</td>` +
-                `<td>${num(r.minusHours, 1)}</td>` +
-                `<td class="t-center"><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:100%;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;box-sizing:border-box"></td>` +
-                `<td class="t-result">` +
+                `<td class="col-stat">${esc(r.skillLevel)}-${esc(String(r.experienceLevel).replace('CSEG', ''))}</td>` +
+                `<td class="col-stat">${num(r.speedCoefficient, 4)}</td>` +
+                `<td class="col-stat">${num(r.assignmentHours, 1)}</td>` +
+                `<td class="col-stat">${num(r.minusHours, 1)}</td>` +
+                `<td class="col-stat"><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:100%;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;box-sizing:border-box"></td>` +
+                `<td class="col-stat t-result">` +
                   `<strong>${num(r.targetCount, 1)}</strong>` +
                 `</td>` +
               `</tr>`
