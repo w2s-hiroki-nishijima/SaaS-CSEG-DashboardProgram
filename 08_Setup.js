@@ -97,9 +97,9 @@ function createMonthlyTeamSheet() {
 }
 
 /**
- * 「アサイン元データ」の「yyyy年M月アサイン活用報告」シートを読み込み、
+ * ASSIGNMENT_SPREADSHEET_IDの「yyyy年M月アサイン活用報告」シートを読み込み、
  * MONTHLY_TEAM_SPREADSHEET の対応月タブのE列・F列を更新する。
- * A列が一致する行に対して B列→E列、C+D列の合算→F列 を書き込む。
+ * A列が一致する行に対して H列→E列、C+D列の合算→F列 を書き込む。
  */
 function syncAssignmentToMonthlyTeam() {
   const srcSs = openSpreadsheetById_(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID, 'アサイン元データ');
