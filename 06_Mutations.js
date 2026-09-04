@@ -26,6 +26,19 @@ function saveMonthlyTargets(payload) {
   throw new Error('目標件数はアサイン活用報告シートから自動計算されるため、管理画面からは変更できません。');
 }
 
+/** 管理者が調整時間を変更し、月別目標シートのG列・H列を更新する。 */
+function saveAdjustmentHours(payload) {
+  assertAdmin_();
+  const month = monthKey_(payload.month);
+  const rows = readMonthlyTargetRows_(month);
+  const current = rows.find(function(r) { return String(r.memberId) === String(payload.memberId); });
+  if (!current) throw new Error('月別目標シートにメンバーが見つかりません: ' + payload.memberId);
+  const adjustment = nonNegative_(payload.adjustmentHours);
+  const target = TargetSnapshotEntity.calculate(current.speedCoefficient, current.assignmentHours, current.minusHours, adjustment);
+  getMonthlyTeamSheet_(month).getRange(current.rowNumber, 7, 1, 2).setValues([[adjustment, target]]);
+  return { ok: true, adjustmentHours: adjustment, targetCount: round_(target, 1) };
+}
+
 /** 本人または管理者の月別アサイン実績を外部ブックへ保存する。 */
 function saveAssignmentEntry(input) {
   if (!input || !input.memberId) throw new Error('メンバーを選択してください。');
