@@ -36,7 +36,8 @@ function clientApiHandlers_() {
     rebuildAnalyticsCacheAfterBacklogSync: rebuildAnalyticsCacheAfterBacklogSync,
     resetMemberGoogleIdentity: resetMemberGoogleIdentity,
     logoutGoogleIdentity: logoutGoogleIdentity,
-    getErrorAnalysis: getErrorAnalysis
+    getErrorAnalysis: getErrorAnalysis,
+    saveAdjustmentHours: saveAdjustmentHours
   };
 }
 
