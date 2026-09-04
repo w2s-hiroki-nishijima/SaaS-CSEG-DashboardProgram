@@ -991,7 +991,7 @@ function renderTargets(d) {
                 `<td>${num(r.speedCoefficient, 4)}</td>` +
                 `<td>${num(r.assignmentHours, 1)}</td>` +
                 `<td>${num(r.minusHours, 1)}</td>` +
-                `<td class="t-center"><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:64px;text-align:right;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit"></td>` +
+                `<td class="t-center"><input class="adjustment-input" type="number" min="0" step="0.5" value="${r.adjustmentHours}" style="width:100%;text-align:center;border:1px solid var(--line);border-radius:6px;padding:3px 6px;font:inherit;box-sizing:border-box"></td>` +
                 `<td class="t-result">` +
                   `<strong>${num(r.targetCount, 1)}</strong>` +
                 `</td>` +
