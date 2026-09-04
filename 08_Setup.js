@@ -65,13 +65,14 @@ function seedDefaults_() {
 
 /** 同期・通知などの既存重複トリガーを避けて定期トリガーを登録する。 */
 function installTriggers_() {
-  const handlers = ['runHourlyBacklogSync_', 'runNotificationJobs_', 'continueBacklogSync_', 'runMonthlyTeamSheetCreate_'];
+  const handlers = ['runHourlyBacklogSync_', 'runNotificationJobs_', 'continueBacklogSync_', 'runMonthlyTeamSheetCreate_', 'syncAssignmentToMonthlyTeam'];
   ScriptApp.getProjectTriggers().forEach(function(trigger) {
     if (handlers.indexOf(trigger.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(trigger);
   });
   ScriptApp.newTrigger('runHourlyBacklogSync_').timeBased().everyHours(1).create();
   ScriptApp.newTrigger('runNotificationJobs_').timeBased().everyDays(1).atHour(9).create();
   ScriptApp.newTrigger('runMonthlyTeamSheetCreate_').timeBased().onMonthDay(1).atHour(8).create();
+  ScriptApp.newTrigger('syncAssignmentToMonthlyTeam').timeBased().everyWeeks(1).onWeekDay(ScriptApp.WeekDay.FRIDAY).atHour(0).create();
 }
 
 /** 毎月1日に前月タブを複製して当月の所属チームシートを作成する。 */
@@ -93,4 +94,54 @@ function runMonthlyTeamSheetCreate_() {
 /** GASエディタから手動実行して当月の所属チームシートを作成する。 */
 function createMonthlyTeamSheet() {
   runMonthlyTeamSheetCreate_();
+}
+
+/**
+ * 「アサイン元データ」の「yyyy年M月アサイン活用報告」シートを読み込み、
+ * MONTHLY_TEAM_SPREADSHEET の対応月タブのE列・F列を更新する。
+ * A列が一致する行に対して B列→E列、C+D列の合算→F列 を書き込む。
+ */
+function syncAssignmentToMonthlyTeam() {
+  const srcSs = openSpreadsheetById_(CSEG_APP.ASSIGNMENT_SPREADSHEET_ID, 'アサイン元データ');
+  const dstSs = openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック');
+
+  var updated = 0;
+  srcSs.getSheets().forEach(function(srcSheet) {
+    // 「yyyy年M月アサイン活用報告」形式のシートのみ対象
+    var m = srcSheet.getName().match(/^(\d{4}年\d+月)アサイン活用報告$/);
+    if (!m) return;
+
+    var monthLabel = m[1]; // 例: "2026年9月"
+    var dstSheet = dstSs.getSheetByName(monthLabel);
+    if (!dstSheet) return;
+
+    // アサイン元データを読み込む（2行目以降、A～D列）
+    var srcLastRow = srcSheet.getLastRow();
+    if (srcLastRow < 2) return;
+    var srcData = srcSheet.getRange(2, 1, srcLastRow - 1, 8).getValues();
+
+    // 書き込み先のA列をキーにしたマップを作成（2行目以降）
+    var dstLastRow = dstSheet.getLastRow();
+    if (dstLastRow < 2) return;
+    var dstKeys = dstSheet.getRange(2, 1, dstLastRow - 1, 1).getValues();
+    var dstKeyMap = {};
+    dstKeys.forEach(function(row, i) {
+      var key = String(row[0]).trim();
+      if (key) dstKeyMap[key] = i + 2; // 実際の行番号（1始まり）
+    });
+
+    // A列が一致する行にE列・F列を書き込む
+    srcData.forEach(function(row) {
+      var key = String(row[0]).trim();
+      if (!key || !(key in dstKeyMap)) return;
+      var dstRow = dstKeyMap[key];
+      var colH = row[7];
+      var colCandD = (Number(row[2]) || 0) + (Number(row[3]) || 0);
+      dstSheet.getRange(dstRow, 5).setValue(colH);   // E列
+      dstSheet.getRange(dstRow, 6).setValue(colCandD); // F列
+      updated++;
+    });
+  });
+
+  return { ok: true, updatedRows: updated };
 }
