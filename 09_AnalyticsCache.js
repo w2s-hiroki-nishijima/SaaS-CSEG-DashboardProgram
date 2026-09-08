@@ -570,10 +570,12 @@ function ensureIssueMetric_(map, name) {
       emergencyCount: 0,
       qualitySum: 0,
       qualityCount: 0,
-      tatCount: 0,
-      tat2: 0,
-      tat5: 0,
-      tat6: 0
+      // tatCount: 0,
+      // tat2: 0,
+      // tat5: 0,
+      // tat6: 0,
+      earlyCompletedCount: 0,
+      lateCompletedCount: 0
     };
   }
 
@@ -601,29 +603,25 @@ function addCompletedMetric_(
     issue.closedAt || ''
   ).slice(0, 10);
 
-  // TATだけは【CS】完了日ありを母数とする
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(closedAt)) {
-    return;
-  }
-
-  metric.tatCount++;
-
-  const tat = Number(issue.tatBusinessDays);
-
+  // 期日内・期日超えは closedAt と dueDate の両方が必要
+  const dueDate = String(issue.dueDate || '').slice(0, 10);
   if (
-    issue.tatBusinessDays === '' ||
-    !isFinite(tat)
+    !/^\d{4}-\d{2}-\d{2}$/.test(closedAt) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)
   ) {
     return;
   }
 
-  if (tat <= 2) {
-    metric.tat2++;
-  } else if (tat <= 5) {
-    metric.tat5++;
+  if (closedAt <= dueDate) {
+    metric.earlyCompletedCount++;
   } else {
-    metric.tat6++;
+    metric.lateCompletedCount++;
   }
+
+  // metric.tatCount++;
+  // const tat = Number(issue.tatBusinessDays);
+  // if (issue.tatBusinessDays === '' || !isFinite(tat)) return;
+  // if (tat <= 2) { metric.tat2++; } else if (tat <= 5) { metric.tat5++; } else { metric.tat6++; }
 }
 
 /** AnalyticsCacheシートをキー検索用Mapとして読み込み、実行中は再利用する。 */
@@ -716,7 +714,8 @@ function mergeIssueMetric_(map, key, source, name, team) {
   target.team = team;
   [
     'completedCount', 'points', 'emergencyCount', 'qualitySum', 'qualityCount',
-    'tatCount', 'tat2', 'tat5', 'tat6'
+    // 'tatCount', 'tat2', 'tat5', 'tat6',
+    'earlyCompletedCount', 'lateCompletedCount'
   ].forEach(function(field) {
     target[field] = toNumber_(target[field]) + toNumber_(source[field]);
   });

@@ -447,9 +447,11 @@ function renderPerformance(d) {
               `<th>目標</th>` +
               `<th>達成率</th>` +
               `<th>品質</th>` +
-              `<th>TAT ≤2日</th>` +
-              `<th>≤5日</th>` +
-              `<th>6日+</th>` +
+              // `<th>TAT ≤2日</th>` +
+              // `<th>≤5日</th>` +
+              // `<th>6日+</th>` +
+              `<th>期日内完了</th>` +
+              `<th>期日超え</th>` +
             `</tr>` +
           `</thead>` +
           `<tbody>` +
@@ -469,9 +471,11 @@ function renderPerformance(d) {
                   `</span>` +
                 `</td>` +
                 `<td>${r.qualityAverage == null ? '-' : num(r.qualityAverage, 2)}</td>` +
-                `<td>${num(r.tat2)}</td>` +
-                `<td>${num(r.tat5)}</td>` +
-                `<td>${num(r.tat6)}</td>` +
+                // `<td>${num(r.tat2)}</td>` +
+                // `<td>${num(r.tat5)}</td>` +
+                // `<td>${num(r.tat6)}</td>` +
+                `<td>${num(r.earlyCompletedCount)}</td>` +
+                `<td>${num(r.lateCompletedCount)}</td>` +
               `</tr>` +
               `<tr class="performance-detail-row hidden" data-team="${esc(r.team)}" data-name="${esc(r.name)}">` +
                 `<td colspan="10"><div class="performance-detail-content"></div></td>` +
@@ -1071,9 +1075,9 @@ function renderAggregate(d) {
               `<th>目標</th>` +
               `<th>達成率</th>` +
               `<th>品質</th>` +
-              `<th>TAT≤2</th>` +
-              `<th>≤5</th>` +
-              `<th>6+</th>` +
+              // `<th>TAT≤2</th>` +
+              // `<th>≤5</th>` +
+              // `<th>6+</th>` +
               `<th>期限超過</th>` +
             `</tr>` +
           `</thead>` +
@@ -1093,9 +1097,9 @@ function renderAggregate(d) {
                   `</span>` +
                 `</td>` +
                 `<td>${r.qualityAverage == null ? '-' : num(r.qualityAverage, 2)}</td>` +
-                `<td>${num(r.tat2)}</td>` +
-                `<td>${num(r.tat5)}</td>` +
-                `<td>${num(r.tat6)}</td>` +
+                // `<td>${num(r.tat2)}</td>` +
+                // `<td>${num(r.tat5)}</td>` +
+                // `<td>${num(r.tat6)}</td>` +
                 `<td>${num(r.overdueCount)}</td>` +
               `</tr>`
             )).join('')}` +
