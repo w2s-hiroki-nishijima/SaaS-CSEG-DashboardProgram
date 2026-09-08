@@ -684,8 +684,10 @@ async function addSkillMaster() {
 function renderAssignments(d) {
   state.cache.assignments = d;
   const own = d.user.memberId;
-  const editableMembers = d.user.isAdmin ? d.members : d.members.filter(m => String(m.memberId) === String(own));
-  const options = editableMembers.map(m => `<option value="${esc(m.memberId)}" ${String(m.memberId) === String(own) ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
+  const ownName = d.user.name;
+  const isOwnMember = m => (own && String(m.memberId) === String(own)) || (!own && ownName && m.name === ownName);
+  const editableMembers = d.user.isAdmin ? d.members : d.members.filter(m => isOwnMember(m));
+  const options = editableMembers.map(m => `<option value="${esc(m.memberId)}" ${isOwnMember(m) ? 'selected' : ''}>${esc(m.name)} / ${esc(m.team)}</option>`).join('');
   $('#content').innerHTML = (
     `<div class="grid-2">` +
       `<section class="panel">` +

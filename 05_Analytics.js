@@ -48,7 +48,7 @@ function buildPerformanceData_(month) {
       byMember[key] = {
         memberId: member.memberId || '', name: name, team: team || '未設定', completedCount: 0, points: 0,
         emergencyCount: 0, qualitySum: 0, qualityCount: 0,
-        // tat2: 0, tat5: 0, tat6: 0,
+        tat2: 0, tat5: 0, tat6: 0,
         earlyCompletedCount: 0, lateCompletedCount: 0, targetCount: 0
       };
     }
@@ -73,9 +73,9 @@ function buildPerformanceData_(month) {
     metric.emergencyCount += toNumber_(source.emergencyCount);
     metric.qualitySum += toNumber_(source.qualitySum);
     metric.qualityCount += toNumber_(source.qualityCount);
-    // metric.tat2 += toNumber_(source.tat2);
-    // metric.tat5 += toNumber_(source.tat5);
-    // metric.tat6 += toNumber_(source.tat6);
+    metric.tat2 += toNumber_(source.tat2);
+    metric.tat5 += toNumber_(source.tat5);
+    metric.tat6 += toNumber_(source.tat6);
     metric.earlyCompletedCount += toNumber_(source.earlyCompletedCount);
     metric.lateCompletedCount += toNumber_(source.lateCompletedCount);
   });
@@ -85,7 +85,7 @@ function buildPerformanceData_(month) {
       memberId: m.memberId || '', name: m.name, team: m.team || '', completedCount: m.completedCount,
       points: round_(m.points, 2), emergencyCount: m.emergencyCount,
       qualityAverage: m.qualityCount ? round_(m.qualitySum / m.qualityCount, 2) : null,
-      // tat2: m.tat2, tat5: m.tat5, tat6: m.tat6,
+      tat2: m.tat2, tat5: m.tat5, tat6: m.tat6,
       earlyCompletedCount: m.earlyCompletedCount, lateCompletedCount: m.lateCompletedCount,
       targetCount: round_(m.targetCount, 1), achievementRate: m.targetCount ? m.points / m.targetCount : 0
     };
