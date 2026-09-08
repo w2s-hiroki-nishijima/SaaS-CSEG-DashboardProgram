@@ -110,29 +110,34 @@ function updateRoute(historyMode = 'push') {
 /** 利用者情報と初期ページを取得し、ランディング画面からアプリ本体へ切り替える。 */
 async function enterDashboard() {
   if (state.entering) return;
-  let result = null;
   state.entering = true;
   busy(true, 'アプリを起動しています...');
+  let authSucceeded = false;
+  let targetPage, targetMonth;
   try {
     const route = await getInitialRoute();
-    const initial = await rpc('getInitialView', route.page, route.month);
-    state.boot = initial.boot;
+
+    // フェーズ1: 認証・ナビ情報のみ取得してシェルを即表示
+    const boot = await rpc('getBootstrapData');
+    state.boot = boot;
+
+    const allowedPageIds = boot.pages
+      .filter(p => !p.admin || boot.user.isAdmin)
+      .map(p => p.id);
+    targetPage = allowedPageIds.indexOf(String(route.page || 'dashboard')) >= 0
+      ? String(route.page || 'dashboard') : 'dashboard';
+    targetMonth = /^\d{4}-\d{2}$/.test(String(route.month || ''))
+      ? route.month : boot.currentMonth;
+
+    state.page = targetPage;
+    $('#globalMonth').value = targetMonth;
     buildNav();
-    state.page = initial.page;
-    $('#globalMonth').value = initial.month;
     renderUser();
     $('#landing').classList.add('hidden');
     $('#app').classList.remove('hidden');
     preparePageChrome(state.page);
-    state.lastServerView = {
-      page: state.page,
-      month: initial.month,
-      data: initial.data,
-      loadedAt: Date.now()
-    };
-    renderInitialPage(state.page, initial.data);
     updateRoute('replace');
-    result = initial;
+    authSucceeded = true;
   } catch (e) {
     if (String(e.message || '').includes('閲覧権限がありません')) {
       await showGoogleIdentityLogin();
@@ -145,7 +150,19 @@ async function enterDashboard() {
     state.entering = false;
     busy(false);
   }
-  return result;
+
+  if (!authSucceeded) return;
+
+  // フェーズ2: ページデータを非同期取得（シェルは表示済み）
+  $('#content').innerHTML = '<div class="panel"><div class="empty">データを読み込んでいます...</div></div>';
+  try {
+    const data = await CLIENT_PAGES[targetPage].load(targetMonth);
+    state.lastServerView = { page: targetPage, month: targetMonth, data, loadedAt: Date.now() };
+    CLIENT_PAGES[targetPage].render(data);
+  } catch (e) {
+    $('#content').innerHTML = `<div class="panel"><div class="empty">${esc(e.message)}</div></div>`;
+    toast(e.message, true);
+  }
 }
 
 /** 共有端末に認証情報を残さないようセッションを削除し、Googleログイン画面へ戻す。 */
@@ -958,7 +975,7 @@ function renderTargets(d) {
     `<section class="panel">` +
       `<div class="panel-head">` +
         `<div>` +
-          `<div class="panel-title">${esc(d.month)} メンバー目標件数</div>` +
+          `<div class="panel-title">${esc(d.month)} メンバー管理</div>` +
           `<div class="panel-sub">目標件数スプレッドシートを参照｜実質スピード ×（アサイン時間 − マイナス − 調整）÷ ${d.baseHours}</div>` +
         `</div>` +
         `<div class="actions">` +

@@ -11,6 +11,7 @@ const CSEG_IDENTITY = Object.freeze({
 /** 画面から呼び出せる業務RPCを明示し、任意のサーバー関数が実行されることを防ぐ。 */
 function clientApiHandlers_() {
   return {
+    getBootstrapData: getBootstrapData,
     getInitialView: getInitialView,
     getDashboardView: getDashboardView,
     getNavigationPrefetchData: getNavigationPrefetchData,
