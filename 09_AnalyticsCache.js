@@ -573,7 +573,9 @@ function ensureIssueMetric_(map, name) {
       tatCount: 0,
       tat2: 0,
       tat5: 0,
-      tat6: 0
+      tat6: 0,
+      earlyCompletedCount: 0,
+      lateCompletedCount: 0
     };
   }
 
@@ -610,10 +612,7 @@ function addCompletedMetric_(
 
   const tat = Number(issue.tatBusinessDays);
 
-  if (
-    issue.tatBusinessDays === '' ||
-    !isFinite(tat)
-  ) {
+  if (issue.tatBusinessDays === '' || !isFinite(tat)) {
     return;
   }
 
@@ -623,6 +622,18 @@ function addCompletedMetric_(
     metric.tat5++;
   } else {
     metric.tat6++;
+  }
+
+  // 期日内・期日超えは closedAt と dueDate の両方が必要
+  const dueDate = String(issue.dueDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+    return;
+  }
+
+  if (closedAt <= dueDate) {
+    metric.earlyCompletedCount++;
+  } else {
+    metric.lateCompletedCount++;
   }
 }
 
@@ -716,7 +727,8 @@ function mergeIssueMetric_(map, key, source, name, team) {
   target.team = team;
   [
     'completedCount', 'points', 'emergencyCount', 'qualitySum', 'qualityCount',
-    'tatCount', 'tat2', 'tat5', 'tat6'
+    'tatCount', 'tat2', 'tat5', 'tat6',
+    'earlyCompletedCount', 'lateCompletedCount'
   ].forEach(function(field) {
     target[field] = toNumber_(target[field]) + toNumber_(source[field]);
   });

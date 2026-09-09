@@ -73,11 +73,11 @@ function buildBootstrapData_(user) {
     pages: [
       { id: 'dashboard', label: 'ダッシュボード', icon: '◫' },
       { id: 'performance', label: '実績確認', icon: '◎' },
-      { id: 'skills', label: 'スキルポイント', icon: '◇' },
+      { id: 'skills', label: 'スキルマップ', icon: '◇' },
       { id: 'assignments', label: 'アサイン状況', icon: '▦' },
       { id: 'errorsearch', label: 'エラー解析', icon: '⊡' },
       { id: 'notifications', label: '通知センター', icon: '◉', admin: true },
-      { id: 'targets', label: 'メンバー目標件数', icon: '⌁', admin: true },
+      { id: 'targets', label: 'メンバー管理', icon: '⌁', admin: true },
       { id: 'aggregate', label: 'アグリゲート', icon: '▥', admin: true },
       { id: 'settings', label: '設定', icon: '⚙', admin: true },
       { id: 'feedback', label: '改善要望・不具合報告', icon: '!' }
