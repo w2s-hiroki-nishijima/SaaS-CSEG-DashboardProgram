@@ -1432,7 +1432,7 @@ function addMemberRow() {
 function deleteMemberRow(btn) {
   const tr = btn.closest('tr');
   const isNew = !tr.dataset.id;
-  if (!window.confirm(isNew ? 'この行を削除しますか？' : `${tr.querySelector('strong') ? tr.querySelector('strong').textContent : 'このメンバー'}を削除しますか？保存するまで反映されません。`)) return;
+  if (isNew && !window.confirm('この行を削除しますか？')) return;
   if (isNew) {
     tr.remove();
   } else {
@@ -1471,6 +1471,8 @@ async function saveMemberSettings() {
       active: !isDeleted
     };
   });
+  const deletedNames = rows.filter(r => r.active === false && r.memberId).map(r => r.name).filter(Boolean);
+  if (deletedNames.length && !window.confirm(`「${deletedNames.join(', ')}」を削除します。よろしいですか？`)) return;
   busy(true, 'メンバー設定を保存しています...');
   try {
     await rpc('saveMonthlyMemberSettings', { month: $('#globalMonth').value, rows });
