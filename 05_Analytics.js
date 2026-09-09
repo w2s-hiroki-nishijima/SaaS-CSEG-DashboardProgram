@@ -90,11 +90,7 @@ function buildPerformanceData_(month) {
       targetCount: round_(m.targetCount, 1), achievementRate: m.targetCount ? m.points / m.targetCount : 0
     };
   }).filter(function(r) { return r.completedCount || r.targetCount; });
-  rows.sort(function(a, b) {
-    const aLast = a.team === 'アサインなし' ? 1 : 0;
-    const bLast = b.team === 'アサインなし' ? 1 : 0;
-    return aLast - bLast || b.points - a.points || a.name.localeCompare(b.name, 'ja');
-  });
+  rows.sort(function(a, b) { return b.points - a.points || a.name.localeCompare(b.name, 'ja'); });
   return {
     month: month,
     rows: rows,

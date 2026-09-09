@@ -363,25 +363,60 @@ function getMembersForMonth_(month) {
   });
 }
 
-/** 数式と書式を保ったまま、月別所属シートのC列を更新し、不在の有効メンバーは末尾へ追加する。 */
+/** 月別所属シートのC列を更新し、新規有効メンバーは末尾追加、削除メンバーは行削除する。 */
 function saveMonthlyTeamMembership_(month, rows) {
   const sheet = getMonthlyTeamSheet_(month);
   const existing = readMonthlyTeamMembership_(month);
   const rowByName = {};
   existing.forEach(function(row) { rowByName[row.name] = row.rowNumber; });
-  const newRows = [];
+
+  const newMembers = [];
+  const deleteRowNumbers = [];
+
   rows.forEach(function(row) {
     const name = String(row.name || '').trim();
     if (!name) return;
     const team = String(row.team || '').trim();
     const isActive = row.active !== false;
     if (rowByName[name]) {
-      sheet.getRange(rowByName[name], 3).setValue(team);
+      if (isActive) {
+        sheet.getRange(rowByName[name], 3).setValue(team);
+      } else {
+        deleteRowNumbers.push(rowByName[name]);
+      }
     } else if (isActive) {
-      newRows.push([name, '', team]);
+      newMembers.push({ name: name, team: team });
     }
   });
-  if (newRows.length) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 3).setValues(newRows);
+
+  // 新規メンバーを月別シート末尾へ追加
+  if (newMembers.length) {
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, newMembers.length, 3)
+      .setValues(newMembers.map(function(m) { return [m.name, '', m.team]; }));
+    addToMemberListSheet_(newMembers);
+  }
+
+  // 削除メンバーを下から順に行削除（行番号ずれを防ぐ）
+  deleteRowNumbers.sort(function(a, b) { return b - a; });
+  deleteRowNumbers.forEach(function(rowNum) { sheet.deleteRow(rowNum); });
+}
+
+/** MONTHLY_TEAM_SPREADSHEET の「メンバーリスト」シートへ未登録メンバーを追加する。 */
+function addToMemberListSheet_(newMembers) {
+  const ss = openSpreadsheetById_(CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID, '月別所属・目標ブック');
+  const sheet = ss.getSheetByName('メンバーリスト');
+  if (!sheet) return;
+  const lastRow = sheet.getLastRow();
+  const existingNames = lastRow >= 2
+    ? sheet.getRange(2, 1, lastRow - 1, 1).getValues().map(function(r) { return String(r[0] || '').trim(); })
+    : [];
+  const existingSet = {};
+  existingNames.forEach(function(n) { if (n) existingSet[n] = true; });
+  const toAdd = newMembers
+    .filter(function(m) { return !existingSet[m.name]; })
+    .map(function(m) { return [m.name, '', m.team]; });
+  if (toAdd.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, toAdd.length, 3).setValues(toAdd);
   }
 }
