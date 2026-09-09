@@ -64,6 +64,27 @@ const CLIENT_PAGES = Object.freeze({
   feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
 });
 
+/** カスタム確認ダイアログを表示し、OK/キャンセルの結果をPromiseで返す。 */
+function showConfirm(message) {
+  return new Promise(resolve => {
+    const dialog = $('#confirmDialog');
+    $('#confirmDialogMessage').textContent = message;
+    dialog.classList.remove('hidden');
+    function cleanup() {
+      dialog.classList.add('hidden');
+      $('#confirmDialogOk').removeEventListener('click', onOk);
+      $('#confirmDialogCancel').removeEventListener('click', onCancel);
+      dialog.removeEventListener('click', onOverlay);
+    }
+    function onOk() { cleanup(); resolve(true); }
+    function onCancel() { cleanup(); resolve(false); }
+    function onOverlay(e) { if (e.target === dialog) { cleanup(); resolve(false); } }
+    $('#confirmDialogOk').addEventListener('click', onOk);
+    $('#confirmDialogCancel').addEventListener('click', onCancel);
+    dialog.addEventListener('click', onOverlay);
+  });
+}
+
 /** 全画面ローダーの表示状態とメッセージを切り替える。 */
 function busy(on, text = '処理中...') {
   $('#loaderText').textContent = text;
@@ -1388,7 +1409,7 @@ async function saveSettings() {
 
 /** 対象メンバーの固定Google ID連携を解除し、次回ログインで再連携させる。 */
 async function resetGoogleIdentity(memberId) {
-  if (!window.confirm('このメンバーのGoogle認証連携を再設定しますか？')) return;
+  if (!await showConfirm('このメンバーのGoogle認証連携を再設定しますか？')) return;
   busy(true, 'Google認証連携を解除しています...');
   try {
     await rpc('resetMemberGoogleIdentity', memberId);
@@ -1429,10 +1450,10 @@ function addMemberRow() {
 }
 
 /** メンバー行を削除マーク（既存）またはDOM削除（新規）する。 */
-function deleteMemberRow(btn) {
+async function deleteMemberRow(btn) {
   const tr = btn.closest('tr');
   const isNew = !tr.dataset.id;
-  if (isNew && !window.confirm('この行を削除しますか？')) return;
+  if (isNew && !await showConfirm('この行を削除しますか？')) return;
   if (isNew) {
     tr.remove();
   } else {
@@ -1472,7 +1493,7 @@ async function saveMemberSettings() {
     };
   });
   const deletedNames = rows.filter(r => r.active === false && r.memberId).map(r => r.name).filter(Boolean);
-  if (deletedNames.length && !window.confirm(`「${deletedNames.join(', ')}」を削除します。よろしいですか？`)) return;
+  if (deletedNames.length && !await showConfirm(`「${deletedNames.join(', ')}」を削除します。よろしいですか？`)) return;
   busy(true, 'メンバー設定を保存しています...');
   try {
     await rpc('saveMonthlyMemberSettings', { month: $('#globalMonth').value, rows });

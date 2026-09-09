@@ -933,6 +933,39 @@
         }
     }
 
+    .confirm-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1001;
+        background: rgba(16, 24, 40, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .confirm-box {
+        background: var(--panel);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 28px 28px 20px;
+        max-width: 420px;
+        width: calc(100% - 32px);
+    }
+
+    .confirm-message {
+        margin: 0 0 20px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--ink);
+        white-space: pre-wrap;
+    }
+
+    .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
     @media(max-width:1050px) {
         .kpi-grid {
             grid-template-columns: repeat(2, 1fr)
