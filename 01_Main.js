@@ -247,6 +247,7 @@ function buildSettingsView_(month) {
   readRows_('IdentityBindings').forEach(function(binding) {
     if (toBoolean_(binding.active) && binding.memberId) linkedMemberIds[String(binding.memberId)] = true;
   });
+  const membersForMonth = getMembersForMonth_(targetMonth);
   return {
     month: targetMonth,
     monthlyTeamSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',
@@ -263,11 +264,13 @@ function buildSettingsView_(month) {
     dataSpreadsheetId: cfg.dataSpreadsheetId,
     lastSyncAt: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_AT') || '',
     lastSyncStatus: PropertiesService.getScriptProperties().getProperty('BACKLOG_LAST_SYNC_STATUS') || '',
-    members: getMembersForMonth_(targetMonth).map(function(member) {
+    members: membersForMonth.map(function(member) {
       const row = Object.assign({}, member);
       row.googleIdentityLinked = Boolean(linkedMemberIds[String(member.memberId)]);
       return row;
-    })
+    }),
+    teams: unique_(membersForMonth.map(function(m) { return m.team; }).filter(Boolean))
+      .sort(function(a, b) { return a.localeCompare(b, 'ja'); })
   };
 }
 
