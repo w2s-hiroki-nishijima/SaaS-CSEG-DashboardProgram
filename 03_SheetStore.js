@@ -363,19 +363,25 @@ function getMembersForMonth_(month) {
   });
 }
 
-/** 数式と書式を保ったまま、月別所属シートのC列だけを更新する。 */
+/** 数式と書式を保ったまま、月別所属シートのC列を更新し、不在の有効メンバーは末尾へ追加する。 */
 function saveMonthlyTeamMembership_(month, rows) {
   const sheet = getMonthlyTeamSheet_(month);
   const existing = readMonthlyTeamMembership_(month);
   const rowByName = {};
   existing.forEach(function(row) { rowByName[row.name] = row.rowNumber; });
-  const missing = [];
+  const newRows = [];
   rows.forEach(function(row) {
     const name = String(row.name || '').trim();
-    if (!rowByName[name]) missing.push(name);
+    if (!name) return;
+    const team = String(row.team || '').trim();
+    const isActive = row.active !== false;
+    if (rowByName[name]) {
+      sheet.getRange(rowByName[name], 3).setValue(team);
+    } else if (isActive) {
+      newRows.push([name, '', team]);
+    }
   });
-  if (missing.length) throw new Error('月別シートに存在しないメンバーがあります: ' + missing.join('、'));
-  rows.forEach(function(row) {
-    sheet.getRange(rowByName[String(row.name).trim()], 3).setValue(String(row.team || '').trim());
-  });
+  if (newRows.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, 3).setValues(newRows);
+  }
 }

@@ -247,7 +247,11 @@ function buildSettingsView_(month) {
   readRows_('IdentityBindings').forEach(function(binding) {
     if (toBoolean_(binding.active) && binding.memberId) linkedMemberIds[String(binding.memberId)] = true;
   });
-  const membersForMonth = getMembersForMonth_(targetMonth);
+  const membersForMonth = getMembersForMonth_(targetMonth).sort(function(a, b) {
+    const aLast = a.team === 'アサインなし' ? 1 : 0;
+    const bLast = b.team === 'アサインなし' ? 1 : 0;
+    return aLast - bLast || String(a.name || '').localeCompare(String(b.name || ''), 'ja');
+  });
   return {
     month: targetMonth,
     monthlyTeamSpreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + CSEG_APP.MONTHLY_TEAM_SPREADSHEET_ID + '/edit',

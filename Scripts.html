@@ -1401,9 +1401,11 @@ async function resetGoogleIdentity(memberId) {
   }
 }
 
-/** チームselectのoption HTMLを生成する。現在値が一覧にない場合は末尾に追加する。 */
+/** チームselectのoption HTMLを生成する。固定チームを先頭に追加し、現在値が一覧にない場合は末尾に追加する。 */
 function memberTeamOptions_(current, teams) {
-  const list = (teams || []).slice();
+  const FIXED = ['スポット', 'アサインなし'];
+  const dynamic = (teams || []).filter(t => !FIXED.includes(t));
+  const list = dynamic.concat(FIXED);
   if (current && !list.includes(current)) list.push(current);
   return `<option value="">（未設定）</option>` +
     list.map(t => `<option value="${esc(t)}" ${t === current ? 'selected' : ''}>${esc(t)}</option>`).join('');

@@ -68,7 +68,11 @@ class AssignmentApplicationService {
   /** 指定月のメンバー候補と予定・実績行を画面用に組み立てる。 */
   getView(month, user) {
     const targetMonth = monthKey_(month);
-    const rows = this.repository.listByMonth(targetMonth);
+    const rows = this.repository.listByMonth(targetMonth).sort(function(a, b) {
+      const aLast = a.team === 'アサインなし' ? 1 : 0;
+      const bLast = b.team === 'アサインなし' ? 1 : 0;
+      return aLast - bLast || String(a.memberName || '').localeCompare(String(b.memberName || ''), 'ja');
+    });
     return {
       month: targetMonth,
       user: user,
