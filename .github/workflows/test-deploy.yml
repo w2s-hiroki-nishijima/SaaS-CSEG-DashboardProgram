@@ -2,6 +2,11 @@ name: GAS テストデプロイ
 
 on:
   workflow_dispatch:
+    inputs:
+      deployment_id:
+        description: "デプロイ先ID（空欄の場合は GAS_TEST_DEPLOYMENT_ID シークレットを使用）"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -39,7 +44,7 @@ jobs:
 
       - name: テストデプロイを更新
         env:
-          GAS_TEST_DEPLOYMENT_ID: ${{ secrets.GAS_TEST_DEPLOYMENT_ID }}
+          GAS_TEST_DEPLOYMENT_ID: ${{ inputs.deployment_id || secrets.GAS_TEST_DEPLOYMENT_ID }}
         run: |
           clasp create-deployment \
             --deploymentId "$GAS_TEST_DEPLOYMENT_ID" \
