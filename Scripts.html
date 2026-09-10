@@ -64,6 +64,27 @@ const CLIENT_PAGES = Object.freeze({
   feedback: { load: () => rpc('getFeedbackView'), render: renderFeedback, monthIndependent: true }
 });
 
+/** カスタム確認ダイアログを表示し、OK/キャンセルの結果をPromiseで返す。 */
+function showConfirm(message) {
+  return new Promise(resolve => {
+    const dialog = $('#confirmDialog');
+    $('#confirmDialogMessage').textContent = message;
+    dialog.classList.remove('hidden');
+    function cleanup() {
+      dialog.classList.add('hidden');
+      $('#confirmDialogOk').removeEventListener('click', onOk);
+      $('#confirmDialogCancel').removeEventListener('click', onCancel);
+      dialog.removeEventListener('click', onOverlay);
+    }
+    function onOk() { cleanup(); resolve(true); }
+    function onCancel() { cleanup(); resolve(false); }
+    function onOverlay(e) { if (e.target === dialog) { cleanup(); resolve(false); } }
+    $('#confirmDialogOk').addEventListener('click', onOk);
+    $('#confirmDialogCancel').addEventListener('click', onCancel);
+    dialog.addEventListener('click', onOverlay);
+  });
+}
+
 /** 全画面ローダーの表示状態とメッセージを切り替える。 */
 function busy(on, text = '処理中...') {
   $('#loaderText').textContent = text;
@@ -1287,7 +1308,10 @@ function renderSettings(s) {
           `<div class="panel-title">メンバーとGoogleアカウント</div>` +
           `<div class="panel-sub">初回ログイン時に設定メールと照合し、以後はGoogleアカウントの固定IDで識別します。${esc(s.month)} の所属チームは <a href="${esc(s.monthlyTeamSpreadsheetUrl)}" target="_blank" rel="noopener">元の月別シート</a> から参照・更新します</div>` +
         `</div>` +
-        `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
+        `<div style="display:flex;gap:8px">` +
+          `<button class="secondary" onclick="addMemberRow()">＋ メンバーを追加</button>` +
+          `<button class="primary" onclick="saveMemberSettings()">メンバー設定を保存</button>` +
+        `</div>` +
       `</div>` +
       `<div class="table-wrap">` +
         `<table class="table" id="memberSettings">` +
@@ -1298,33 +1322,32 @@ function renderSettings(s) {
               `<th>チーム</th>` +
               `<th>権限</th>` +
               `<th>Google認証</th>` +
+              `<th></th>` +
             `</tr>` +
           `</thead>` +
           `<tbody>` +
-            `${s.members.map(m => (
-              `<tr data-id="${esc(m.memberId)}" data-skill="${esc(m.skillLevel)}" data-exp="${esc(m.experienceLevel)}" data-speed="${esc(m.speedCoefficient)}" data-level="${esc(m.compositeLevel)}">` +
-                `<td>` +
-                  `<strong>${esc(m.name)}</strong>` +
-                `</td>` +
-                `<td>` +
-                  `<input class="m-email" type="email" value="${esc(m.email)}">` +
-                `</td>` +
-                `<td>` +
-                  `<input class="m-team" value="${esc(m.team)}">` +
-                `</td>` +
-                `<td>` +
-                  `<select class="m-role">` +
-                    `<option value="member" ${m.role !== 'admin' ? 'selected' : ''}>メンバー</option>` +
-                    `<option value="admin" ${m.role === 'admin' ? 'selected' : ''}>管理者</option>` +
-                  `</select>` +
-                `</td>` +
-                `<td>` +
-                  (m.googleIdentityLinked
-                    ? `<span class="badge green">連携済み</span> <button class="ghost compact" onclick="resetGoogleIdentity('${esc(m.memberId)}')">再設定</button>`
-                    : `<span class="badge">未連携</span>`) +
-                `</td>` +
-              `</tr>`
-            )).join('')}` +
+            `${s.members.map(m => {
+              const teamOpts = memberTeamOptions_(m.team, s.teams);
+              return (
+                `<tr data-id="${esc(m.memberId)}" data-skill="${esc(m.skillLevel)}" data-exp="${esc(m.experienceLevel)}" data-speed="${esc(m.speedCoefficient)}" data-level="${esc(m.compositeLevel)}">` +
+                  `<td><strong>${esc(m.name)}</strong></td>` +
+                  `<td><input class="m-email" type="email" value="${esc(m.email)}"></td>` +
+                  `<td><select class="m-team">${teamOpts}</select></td>` +
+                  `<td>` +
+                    `<select class="m-role">` +
+                      `<option value="member" ${m.role !== 'admin' ? 'selected' : ''}>メンバー</option>` +
+                      `<option value="admin" ${m.role === 'admin' ? 'selected' : ''}>管理者</option>` +
+                    `</select>` +
+                  `</td>` +
+                  `<td>` +
+                    (m.googleIdentityLinked
+                      ? `<span class="badge green">連携済み</span> <button class="ghost compact" onclick="resetGoogleIdentity('${esc(m.memberId)}')">再設定</button>`
+                      : `<span class="badge">未連携</span>`) +
+                  `</td>` +
+                  `<td><button class="ghost compact" onclick="deleteMemberRow(this)">削除</button></td>` +
+                `</tr>`
+              );
+            }).join('')}` +
           `</tbody>` +
         `</table>` +
       `</div>` +
@@ -1386,7 +1409,7 @@ async function saveSettings() {
 
 /** 対象メンバーの固定Google ID連携を解除し、次回ログインで再連携させる。 */
 async function resetGoogleIdentity(memberId) {
-  if (!window.confirm('このメンバーのGoogle認証連携を再設定しますか？')) return;
+  if (!await showConfirm('このメンバーのGoogle認証連携を再設定しますか？')) return;
   busy(true, 'Google認証連携を解除しています...');
   try {
     await rpc('resetMemberGoogleIdentity', memberId);
@@ -1399,19 +1422,78 @@ async function resetGoogleIdentity(memberId) {
   }
 }
 
+/** チームselectのoption HTMLを生成する。固定チームを先頭に追加し、現在値が一覧にない場合は末尾に追加する。 */
+function memberTeamOptions_(current, teams) {
+  const FIXED = ['スポット'];
+  const dynamic = (teams || []).filter(t => !FIXED.includes(t));
+  const list = dynamic.concat(FIXED);
+  if (current && !list.includes(current)) list.push(current);
+  return `<option value="">（未設定）</option>` +
+    list.map(t => `<option value="${esc(t)}" ${t === current ? 'selected' : ''}>${esc(t)}</option>`).join('');
+}
+
+/** 新規メンバー行をテーブルに追加する。 */
+function addMemberRow() {
+  const teams = (state.cache.settings && state.cache.settings.teams) || [];
+  const teamOpts = memberTeamOptions_('', teams);
+  const tr = document.createElement('tr');
+  tr.dataset.id = '';
+  tr.innerHTML =
+    `<td><input class="m-name" placeholder="氏名（必須）" style="width:100%;font:inherit;border:1px solid var(--line);border-radius:6px;padding:4px 8px;box-sizing:border-box"></td>` +
+    `<td><input class="m-email" type="email" placeholder="メール"></td>` +
+    `<td><select class="m-team">${teamOpts}</select></td>` +
+    `<td><select class="m-role"><option value="member" selected>メンバー</option><option value="admin">管理者</option></select></td>` +
+    `<td><span class="badge">未連携</span></td>` +
+    `<td><button class="ghost compact" onclick="deleteMemberRow(this)">削除</button></td>`;
+  $('#memberSettings tbody').appendChild(tr);
+  tr.querySelector('.m-name').focus();
+}
+
+/** メンバー行を削除マーク（既存）またはDOM削除（新規）する。 */
+async function deleteMemberRow(btn) {
+  const tr = btn.closest('tr');
+  const isNew = !tr.dataset.id;
+  if (isNew && !await showConfirm('この行を削除しますか？')) return;
+  if (isNew) {
+    tr.remove();
+  } else {
+    tr.dataset.deleted = 'true';
+    tr.style.opacity = '0.4';
+    tr.querySelectorAll('input, select').forEach(el => { el.disabled = true; });
+    btn.textContent = '取消';
+    btn.onclick = function() { undoDeleteMemberRow(btn); };
+  }
+}
+
+/** メンバー行の削除マークを取り消す。 */
+function undoDeleteMemberRow(btn) {
+  const tr = btn.closest('tr');
+  delete tr.dataset.deleted;
+  tr.style.opacity = '';
+  tr.querySelectorAll('input, select').forEach(el => { el.disabled = false; });
+  btn.textContent = '削除';
+  btn.onclick = function() { deleteMemberRow(btn); };
+}
+
 /** 画面上のメンバー行を収集し、対象月の所属とマスタ設定を保存する。 */
 async function saveMemberSettings() {
   const source = state.cache.settings.members;
   const rows = $$('#memberSettings tbody tr').map(tr => {
-    const old = source.find(m => m.memberId === tr.dataset.id);
+    const old = source.find(m => m.memberId === tr.dataset.id) || {};
+    const isDeleted = tr.dataset.deleted === 'true';
+    const nameInput = tr.querySelector('.m-name');
     return {
       ...old,
-      email: tr.querySelector('.m-email').value,
-      team: tr.querySelector('.m-team').value,
-      role: tr.querySelector('.m-role').value,
-      active: true
+      memberId: tr.dataset.id || undefined,
+      name: nameInput ? nameInput.value.trim() : old.name,
+      email: tr.querySelector('.m-email') ? tr.querySelector('.m-email').value : old.email,
+      team: tr.querySelector('.m-team') ? tr.querySelector('.m-team').value : old.team,
+      role: tr.querySelector('.m-role') ? tr.querySelector('.m-role').value : old.role,
+      active: !isDeleted
     };
   });
+  const deletedNames = rows.filter(r => r.active === false && r.memberId).map(r => r.name).filter(Boolean);
+  if (deletedNames.length && !await showConfirm(`「${deletedNames.join(', ')}」を削除します。よろしいですか？`)) return;
   busy(true, 'メンバー設定を保存しています...');
   try {
     await rpc('saveMonthlyMemberSettings', { month: $('#globalMonth').value, rows });
