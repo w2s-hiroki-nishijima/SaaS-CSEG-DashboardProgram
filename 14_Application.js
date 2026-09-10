@@ -212,6 +212,16 @@ class SettingsApplicationService {
   }
 }
 
+/** MembersシートのmemberIdから「m」+数字形式の最大値を読み取り、次の連番を返す。 */
+function nextMemberIdSeq_() {
+  let max = 0;
+  readRows_('Members').forEach(function(r) {
+    const m = String(r.memberId || '').match(/^m(\d+)$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return max + 1;
+}
+
 /** メンバーマスタと月別所属の一括保存を扱う。 */
 class MemberApplicationService {
   /** 保存先、時計、ID生成処理を受け取る。 */
@@ -233,8 +243,8 @@ class MemberApplicationService {
   /** メンバー入力を検証・正規化し、速度係数と複合レベルを補完して保存する。 */
   saveMembers(inputRows, actor) {
     if (!Array.isArray(inputRows)) throw new DomainValidationError('メンバーデータが不正です。');
-    const idFactory = this.idFactory;
     const clock = this.clock;
+    let nextSeq = null;
     const rows = inputRows.map(function(input) {
       const name = String(input.name || '').trim();
       if (!name) throw new DomainValidationError('メンバー名を入力してください。');
@@ -244,8 +254,13 @@ class MemberApplicationService {
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new DomainValidationError(name + 'のメールアドレス形式が不正です。');
       }
+      let memberId = input.memberId;
+      if (!memberId) {
+        if (nextSeq === null) nextSeq = nextMemberIdSeq_();
+        memberId = 'm' + String(nextSeq++).padStart(3, '0');
+      }
       return {
-        memberId: input.memberId || 'member_' + idFactory(),
+        memberId: memberId,
         name: name,
         email: email,
         team: String(input.team || ''),
